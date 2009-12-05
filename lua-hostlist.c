@@ -46,12 +46,13 @@ static hostlist_t lua_hostlist_create (lua_State *L, const char *s)
 
 static int l_hostlist_new (lua_State *L)
 {
-    const char *s = luaL_checkstring (L, 1);
-    push_hostlist (L, s);
+    push_hostlist (L, lua_tostring (L, 1));
     /*
-     *  Replace string at postion 1 with hostlist now on top
+     *  If a  string was at postion 1,
+     *   replace it with the new hostlist
      */
-    lua_replace (L, 1);
+    if (lua_gettop (L) > 1)
+        lua_replace (L, 1);
     return (1);
 }
 
@@ -82,10 +83,18 @@ static int l_hostlist_nth (lua_State *L)
     hl = lua_tohostlist (L, 1);
     lua_pop (L, 1);
 
-    if (abs(i) > hostlist_count (hl)) {
+    /*
+     *  If index == 0 or is outside of the range of this hostlist,
+     *   return nil
+     */
+    if ((i == 0) || (abs(i) > hostlist_count (hl))) {
         lua_pushnil (L);
         return (1);
     }
+
+    /*
+     *  -i indexes from end of list
+     */
     if (i < 0)
         i += hostlist_count (hl) + 1;
 
