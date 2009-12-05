@@ -64,6 +64,17 @@ TestHostlist = {
 	intersect = {
 		{ hl = "foo[1-100]", arg = "foo[2-101]", result = "foo[2-100]" },
 	},
+
+	next = {
+		"foo[1-50]", "", "foo[1,1,1]",
+	},
+
+	pop = {
+		{ hl="foo[1-10]", pop=3,  result="foo[1-7]" },
+		{ hl="foo[1-10]", pop=0,  result="foo[1-10]" },
+		{ hl="foo[1-10]", pop=-3, result="foo[4-10]" },
+	},
+
 }
 
 function test_new_nil_args()
@@ -71,6 +82,20 @@ function test_new_nil_args()
 	assert_userdata (hostlist.new(nil))
 end
 
+
+function test_hostlist_next()
+	for _,s in pairs(TestHostlist.next) do
+		local h = hostlist.new (s)
+		local count = 0
+		assert_userdata (h)
+		for host in h:next() do
+			assert_string (host)
+			count = count + 1
+			assert_equal (h[count], host)
+		end
+		assert_equal (#h, count)
+	end
+end
 
 function test_uniq ()
 	for s,r in pairs (TestHostlist.uniq) do
@@ -137,6 +162,14 @@ function test_delete_n()
 	for _,t in pairs (TestHostlist.delete_n) do
 		local hl = hostlist.new (t.hl)
 		assert_equal (t.result, tostring (hl:delete_n(t.delete, t.n)))
+	end
+end
+
+function test_pop()
+	for _,t in pairs (TestHostlist.pop) do
+		local hl = hostlist.new (t.hl)
+		hl:pop(t.pop)
+		assert_equal (t.result, tostring (hl))
 	end
 end
 
