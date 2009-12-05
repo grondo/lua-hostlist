@@ -172,7 +172,8 @@ static int hostlist_remove_list (hostlist_t hl, hostlist_t del, int limit)
          *  Delete up to limit occurences of host in list (0 == unlimited)
          */
         int n = limit;
-        while (n-- && hostlist_delete_host (hl, host)) {;}
+        /* If n == 0 then (--n) should never evaluate true */
+        while (hostlist_delete_host (hl, host) && --n) {;}
         free (host);
     }
     hostlist_iterator_destroy (i);
@@ -200,6 +201,26 @@ static int l_hostlist_remove_n (lua_State *L)
 
     /*
      *  Return a reference to the original hostlist
+     */
+    lua_settop (L, 1);
+    return (1);
+}
+
+/*
+ *  As above, but table many args, always remove all hosts
+ */
+static int l_hostlist_remove (lua_State *L)
+{
+    hostlist_t hl = lua_string_to_hostlist (L, 1);
+    int argc = lua_gettop (L);
+    int i;
+
+    for (i = 2; i < argc+1; i++) {
+        hostlist_t del = lua_string_to_hostlist (L, i);
+        hostlist_remove_list (hl, del, 0);
+    }
+
+    /*  Remove all args but the hostlist
      */
     lua_settop (L, 1);
     return (1);
@@ -286,12 +307,16 @@ static struct hostlist_args *lua_hostlist_args_create (lua_State *L)
                 goto failed;
             args->created[i] = 1;
         }
+        else {
+            luaL_argerror (L, idx, "Expected hostlist or string");
+        }
     }
     lua_pop (L, args->argc);
 
     return (args);
 
  failed:
+    lua_pop (L, args->argc);
     lua_hostlist_args_destroy (args);
     return (NULL);
 }
@@ -380,8 +405,8 @@ static int l_hostlist_xor (lua_State *L)
 
 
 /*
- *  hostlist_del: delete first occurence of hosts from first argument
- *   Returns a new hostlist object
+ *  hostlist_del: delete all occurence of hosts from first argument
+ *   Returns a new hostlist object and doesn't modify the first arg
  */
 static int l_hostlist_del (lua_State *L)
 {
@@ -669,7 +694,7 @@ static const struct luaL_Reg hostlist_functions [] = {
     { "new",        l_hostlist_new       },
     { "intersect",  l_hostlist_intersect },
     { "xor",        l_hostlist_xor       },
-    { "delete",     l_hostlist_del       },
+    { "delete",     l_hostlist_remove    },
     { "delete_n",   l_hostlist_remove_n  },
     { "union",      l_hostlist_union     },
     { "map",        l_hostlist_map       },
@@ -689,7 +714,7 @@ static const struct luaL_Reg hostlist_methods [] = {
     { "__pow",      l_hostlist_xor       },
     { "__sub",      l_hostlist_del       },
     { "__gc",       l_hostlist_destroy   },
-    { "delete",     l_hostlist_del       },
+    { "delete",     l_hostlist_remove    },
     { "delete_n",   l_hostlist_remove_n  },
     { "concat",     l_hostlist_concat    },
     { "uniq",       l_hostlist_uniq      },

@@ -117,7 +117,7 @@ function check_opts (opts, input)
 	opts.d = opts.d and convert_string_to_escape (opts.d) or ","
 
 	if (opts.f ~= nil) then 
-		local fn, msg = loadstring ("return function (s) "..opts.f.." end")
+		local fn, msg = loadstring ("return function (s) return "..opts.f.." end")
 		if (fn == nil) then
 			log_fatal ("Failed to compile filter option: %s\n", msg)
 		end
