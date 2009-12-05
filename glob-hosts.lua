@@ -158,7 +158,7 @@ function hostlist_output (opts, hl)
 	elseif opts.c then
 		print (#hl)
 	elseif opts.e then
-		print (table.concat(hl:map(), delim))
+		print (table.concat(hl:expand(), delim))
 	else
 		print (hl)
 	end
@@ -213,19 +213,13 @@ elseif opts.m then
 		local l = hostlist.new (v):uniq()
 		hl = hl and hl - l or l
 	end
-elseif opts.f then
-    -- Run `filter' argument through map and return result
-	for _,s in pairs(input) do
-	    for _,v in pairs (hostlist.new (s):map(opts.f())) do
-			if (v ~= nil) then
-				hl = hl and hl + v or hostlist.new (v)
-			end
-		end
-	end
 else
 	-- Default: Append all hosts
 	hl = hostlist.concat (unpack (input))
 end
+
+-- Filter result if requested
+if opts.f then hl = hl:map(opts.f()) end
 
 if (hl) then hostlist_output (opts, hl) end
 
