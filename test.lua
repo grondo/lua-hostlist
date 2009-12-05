@@ -28,7 +28,7 @@ printf ("Access nth host with [] operator: h[%d] = %s", 1, h[1])
 printf ("Access from end [] operator: h[%d] = %s", -1, h[-1])
 
 -- Other methods
-h:append ("foo100")
+h:concat ("foo100")
 h:delete ("foo100")
 h:sort()
 h:uniq()

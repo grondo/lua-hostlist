@@ -26,10 +26,11 @@ Usage: %s [OPTION]... [HOSTLIST]...
   -i, --intersection           Intersection of two HOSTLIST args
   -x, --exclude                Exclude all HOSTLIST args from first HOSTLIST
   -X, --xor                    Symmetric difference (XOR) of all HOSTLIST args
+  -D, --remove=N               Remove only N occurrences of args from HOSTLIST
+  -f, --filter=CODE            Map Lua code CODE over all hosts
 
  An arbitrary number of HOSTLIST arguments are supported for all
-  operations except intersection and xor, where exactly 2 args are expected.
-  The default operation is -u, --union.
+  operations.  The default operation is to concatenate all HOSTLIST args.
 
 ]]
 	
@@ -50,7 +51,7 @@ function log_msg (...)
 end
 
 function log_fatal (...)
-	log_msg ("Fatal: ".. ...)
+	log_msg (...)
 	os.exit (1)
 end
 
@@ -72,7 +73,7 @@ function parse_cmdline (arg)
 	local alt_getopt = (require "alt_getopt")
 	local getopt     = alt_getopt.get_opts
 
-	local optstring = "hcen:d:s:umixX"
+	local optstring = "hcen:d:D:f:s:umixX"
 	local opt_table = {
 		help                 = "h",
 		count                = "c",
@@ -86,20 +87,16 @@ function parse_cmdline (arg)
 		intersection         = "i",
 		exclude              = "x",
 		xor                  = "X",
+		remove               = "D",
+		filter               = "f",
 	}
 
     return getopt (arg, optstring, opt_table)
 end
 
 function convert_string_to_escape (s)
-	local t = { t='\t', n='\n', f='\f', v='\v', t='\t' }
-	local c1 = s:sub(1,1)
-	local c2 = s:sub(2,2)
-
-	if c1 == '\\' and t[c2] then
-		return t[c2]
-	end
-	return s
+	local t = { t='\t', n='\n', f='\f', v='\v', t='\t', r='\r',}
+	return s:sub(1,1) == '\\' and t[s:sub(2,2)] or s
 end
 
 function check_opts (opts, input)
@@ -119,11 +116,12 @@ function check_opts (opts, input)
 	--
 	opts.d = opts.d and convert_string_to_escape (opts.d) or ","
 
-	--
-	--  Check number of args to xor or intersect
-	--
-	if (opts.i or opts.X) and (#input ~= 2) then
-		log_fatal ("intersect/xor require exactly two hostlist args\n")
+	if (opts.f ~= nil) then 
+		local fn, msg = loadstring ("return function (s) "..opts.f.." end")
+		if (fn == nil) then
+			log_fatal ("Failed to compile filter option: %s\n", msg)
+		end
+		opts.f = fn
 	end
 end
 
@@ -157,6 +155,8 @@ function hostlist_output (opts, hl)
 
 	if opts.n then
 		print (hl[opts.n])
+	elseif opts.c then
+		print (#hl)
 	elseif opts.e then
 		print (table.concat(hl:map(), delim))
 	else
@@ -191,21 +191,41 @@ end
 check_opts (opts, input)
 
 if opts.u then
+	-- Union
 	hl = hostlist.union (unpack (input))
-elseif opts.m or opts.x then
-	hl = hostlist.delete (unpack (input))
 elseif opts.i then
+	-- Intersection
 	hl = hostlist.intersect (unpack (input))
 elseif opts.X then
+	-- XOR or symmetric set difference
 	hl = hostlist.xor (unpack (input))
+elseif opts.x then
+	-- Delete all hosts
+	hl = hostlist.delete (unpack (input))
+elseif opts.D then
+	--  Delete the first N hosts (opts.D) from each hostlist
+	for _,v in pairs(input) do
+		hl = hl and hl:delete_n (v, opts.D) or hostlist.new (v)
+	end
+elseif opts.m then
+	--  Like delete, but treat hostlists as sets
+	for _,v in pairs(input) do
+		local l = hostlist.new (v):uniq()
+		hl = hl and hl - l or l
+	end
+elseif opts.f then
+    -- Run `filter' argument through map and return result
+	for _,s in pairs(input) do
+	    for _,v in pairs (hostlist.new (s):map(opts.f())) do
+			if (v ~= nil) then
+				hl = hl and hl + v or hostlist.new (v)
+			end
+		end
+	end
 else
-	hl = hostlist.union (unpack (input))
-	hl:uniq()
+	-- Default: Append all hosts
+	hl = hostlist.concat (unpack (input))
 end
-
--- `minus' and `exclude' are the same afaict, so we make them
---   differ by having the --minus option return a uniq'd list:
-if opts.m then hl:uniq() end
 
 if (hl) then hostlist_output (opts, hl) end
 
