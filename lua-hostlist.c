@@ -44,6 +44,33 @@ static hostlist_t lua_hostlist_create (lua_State *L, const char *s)
     return (lua_tohostlist (L, -1));
 }
 
+/*
+ *  Replace a string at index in the Lua stack with a hostlist
+ *   If index is already a hostlist, just return a reference to
+ *   that object.
+ *
+ */
+static hostlist_t lua_string_to_hostlist (lua_State *L, int index)
+{
+    const char *s;
+    hostlist_t hl;
+
+    if (lua_isuserdata (L, index))
+        return lua_tohostlist (L, index);
+
+    /*
+     *  Create a new hostlist on top of stack
+     */
+    s = luaL_checkstring (L, index);
+    hl = lua_hostlist_create (L, s);
+
+    /*
+     *  Replace the string at index with this hostlist
+     */
+    lua_replace (L, index);
+    return (hl);
+}
+
 static int l_hostlist_new (lua_State *L)
 {
     push_hostlist (L, lua_tostring (L, 1));
@@ -142,34 +169,6 @@ static int l_hostlist_pop (lua_State *L)
     }
     return (1);
 }
-
-/*
- *  Replace a string at index in the Lua stack with a hostlist
- *   If index is already a hostlist, just return a reference to
- *   that object.
- *
- */
-static hostlist_t lua_string_to_hostlist (lua_State *L, int index)
-{
-    const char *s;
-    hostlist_t hl;
-
-    if (lua_isuserdata (L, index))
-        return lua_tohostlist (L, index);
-
-    /*
-     *  Create a new hostlist on top of stack
-     */
-    s = luaL_checkstring (L, index);
-    hl = lua_hostlist_create (L, s);
-
-    /*
-     *  Replace the string at index with this hostlist
-     */
-    lua_replace (L, index);
-    return (hl);
-}
-
 
 static int hostlist_remove_list (hostlist_t hl, hostlist_t del, int limit)
 {
@@ -556,25 +555,75 @@ static int l_hostlist_index (lua_State *L)
     return (l_hostlist_nth (L));
 }
 
+/*
+ *  Map a function across all members of a hostlist.
+ *   Returns a hostlist. Function argument is required.
+ */
 static int l_hostlist_map (lua_State *L)
+{
+    char *host;
+    hostlist_t hl, r;
+    hostlist_iterator_t i;
+
+    hl = lua_string_to_hostlist (L, 1);
+    if (!lua_isfunction (L, 2))
+        return luaL_argerror (L, 2, "expected function argument");
+
+    /*  Create new hostlist at top of stack to hold results:
+     */
+    r = lua_hostlist_create (L, NULL);
+
+    i = hostlist_iterator_create (hl);
+    while ((host = hostlist_next (i))) {
+        /*  Copy function to run to top of stack to be consumed by lua_pcall
+         */
+        lua_pushvalue (L, 2);
+
+        /*  Push hostname for arg to fn:
+         */
+        lua_pushstring (L, host);
+
+        /*
+         *  Call function and leave 1 result on the stack
+         */
+        if (lua_pcall (L, 1, 1, 0) != 0) {
+                hostlist_iterator_destroy (i);
+                free (host);
+                return luaL_error (L, "map: %s", lua_tostring (L, -1));
+        }
+
+        /*
+         *  Only push entry on hostlist if there was a return value
+         */
+        if (!lua_isnil (L, -1))
+            hostlist_push_host (r, lua_tostring (L, -1));
+        lua_pop (L, 1);
+        free (host);
+    }
+
+    hostlist_iterator_destroy(i);
+
+    /*  Clean up stack and return
+     */
+    lua_replace (L, 1);
+    lua_pop (L, lua_gettop (L) - 1);
+
+    return (1);
+}
+
+/*
+ *  Return a hostlist as a lua table, optionally applying a function
+ *   argument to all hosts.
+ */
+static int l_hostlist_expand (lua_State *L)
 {
     char *host;
     hostlist_t hl;
     hostlist_iterator_t i;
     int has_function;
-    int n, t, created;
+    int n, t;
 
-    if (lua_isstring (L, 1)) {
-        created = 1;
-        hl = hostlist_create (lua_tostring (L, 1));
-    }
-    else {
-        created = 0;
-        hl = lua_tohostlist (L, 1);
-    }
-
-    if (hl == NULL)
-        return luaL_error (L, "Unable to create hostlist");
+    hl = lua_string_to_hostlist (L, 1);
 
     has_function = lua_isfunction (L, 2);
 
@@ -616,8 +665,6 @@ static int l_hostlist_map (lua_State *L)
     }
 
     hostlist_iterator_destroy(i);
-    if (created)
-        hostlist_destroy (hl);
 
     /*  Clean up stack and return
      */
@@ -707,6 +754,7 @@ static const struct luaL_Reg hostlist_functions [] = {
     { "delete_n",   l_hostlist_remove_n  },
     { "union",      l_hostlist_union     },
     { "map",        l_hostlist_map       },
+    { "expand",     l_hostlist_expand    },
     { "nth",        l_hostlist_nth       },
     { "pop",        l_hostlist_pop       },
     { "concat",     l_hostlist_concat    },
@@ -730,6 +778,7 @@ static const struct luaL_Reg hostlist_methods [] = {
     { "sort",       l_hostlist_sort      },
     { "next",       l_hostlist_next      },
     { "map",        l_hostlist_map       },
+    { "expand",     l_hostlist_expand    },
     { "pop",        l_hostlist_pop       },
     { NULL,         NULL                 }
 };
