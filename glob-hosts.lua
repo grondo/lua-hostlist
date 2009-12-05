@@ -202,16 +202,13 @@ elseif opts.X then
 elseif opts.x then
 	-- Delete all hosts
 	hl = hostlist.delete (unpack (input))
+elseif opts.m then
+	--  Like delete, but treat hostlists as sets
+	hl = hostlist.delete (unpack (input)):uniq()
 elseif opts.D then
 	--  Delete the first N hosts (opts.D) from each hostlist
 	for _,v in pairs(input) do
 		hl = hl and hl:delete_n (v, opts.D) or hostlist.new (v)
-	end
-elseif opts.m then
-	--  Like delete, but treat hostlists as sets
-	for _,v in pairs(input) do
-		local l = hostlist.new (v):uniq()
-		hl = hl and hl - l or l
 	end
 else
 	-- Default: Append all hosts
