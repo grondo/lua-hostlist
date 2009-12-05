@@ -17,7 +17,7 @@ Usage: %s [OPTION]... [HOSTLIST]...
 
   -h, --help                   Display this message.
   -c, --count                  Print the number of hosts
-  -s, --size=N                 Output at most N hosts
+  -s, --size=N                 Output at most N hosts (-N for last N hosts)
   -e, --expand                 Expand host list instead of collapsing
   -n, --nth=N                  Output the host at index N (-N to index from end)
   -d, --delimiters=S           Set output delimiter (default = ",")
@@ -147,11 +147,11 @@ end
 function hostlist_output (opts, hl)
 	local n = #hl
 	local size = tonumber (opts.s) or n
+	local sign = size / math.abs (size)
 	local delim = opts.d
 
-	if size < n then
-		hl:pop(n - size)
-	end
+	-- Pop or shift N hosts if requested:
+	hl:pop(sign * (n - math.abs(size)))
 
 	if opts.n then
 		print (hl[opts.n])
