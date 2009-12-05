@@ -143,24 +143,35 @@ static int l_hostlist_count (lua_State *L)
 static int l_hostlist_pop (lua_State *L)
 {
     hostlist_t hl = lua_tohostlist (L, 1);
-    int n = lua_tonumber (L, 2);
+    int shift = 0;
+    int n = 1;
     int i, t;
 
-    lua_pop (L, 2);
+    if (lua_gettop (L) > 2)
+        return luaL_error (L,
+                "Expected 2 arguments to hostlist.pop (got %d)\n");
+
+    if (lua_isnumber (L, 2))
+        n = lua_tonumber (L, 2);
 
     /*
-     *  Create table at position 1 on stack for results of pop
+     *  Create table on top of stack for results of pop
      */
     lua_newtable (L);
     t = lua_gettop (L);
 
-    if (n <= 0 || n >= hostlist_count (hl))
-        return luaL_error (L,
-                "hostlist.pop: Bad count `%d' for hostlist with %d hosts",
-                hostlist_count (hl));
+    if (n < 0) {
+        shift = 1;
+        n = abs(n);
+    }
+
 
     for (i = 0; i < n; i++) {
-        char *host = hostlist_pop (hl);
+        char *host;
+        if (shift)
+            host = hostlist_shift (hl);
+        else
+            host = hostlist_pop (hl);
         if (host == NULL)
             break;
         lua_pushstring (L, host);
