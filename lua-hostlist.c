@@ -245,6 +245,34 @@ static int l_hostlist_remove (lua_State *L)
     return (1);
 }
 
+static int l_hostlist_find (lua_State *L)
+{
+    hostlist_t hl;
+    const char *host;
+    int found;
+
+    /*
+     *   hostlist.find (hostlist, hostname)
+     */
+    hl = lua_string_to_hostlist (L, 1);
+    host = luaL_checkstring (L, 2);
+
+    found = hostlist_find (hl, host);
+    lua_pop (L, 2);
+
+    /*
+     *  Return nil if hostlist not found, otherwise return
+     *   the index of the first match. (Remember: lua index starts
+     *   from 1 not 0.
+     */
+    if (found < 0)
+        lua_pushnil (L);
+    else
+        lua_pushnumber (L, found+1);
+
+    return (1);
+}
+
 static int l_hostlist_concat (lua_State *L)
 {
     hostlist_t hl = lua_string_to_hostlist (L, 1);
@@ -769,6 +797,7 @@ static const struct luaL_Reg hostlist_functions [] = {
     { "nth",        l_hostlist_nth       },
     { "pop",        l_hostlist_pop       },
     { "concat",     l_hostlist_concat    },
+    { "find",       l_hostlist_find      },
     { NULL,         NULL                 }
 };
 
@@ -791,6 +820,7 @@ static const struct luaL_Reg hostlist_methods [] = {
     { "map",        l_hostlist_map       },
     { "expand",     l_hostlist_expand    },
     { "pop",        l_hostlist_pop       },
+    { "find",       l_hostlist_find      },
     { NULL,         NULL                 }
 };
 
