@@ -75,6 +75,17 @@ TestHostlist = {
 		{ hl="foo[1-10]", pop=-3, result="foo[4-10]" },
 	},
 
+	find = {
+		{ hl="foo[1-10]",       host="foo3",        result=3   }, 
+		{ hl="foo[1-10]",       host="foo11",       result=nil }, 
+		{ hl="foo[1-10]-eth0",  host="foo3-eth0",   result=3   }, 
+		{ hl="[1-10]",          host="3",           result=3   }, 
+		{ hl="t0,t",            host="t",           result=2   }, 
+		{ hl="t,t0",            host="t",           result=1   }, 
+		{ hl="i[00-05]",        host="i00",         result=1   }, 
+		{ hl="i[00-05]",        host="i03",         result=4   }, 
+		{ hl="[00-05]i",        host="00",          result=nil }, 
+	},
 }
 
 function test_new_nil_args()
@@ -197,5 +208,14 @@ function test_subtract()
 		local r = h - t.del
 		assert_userdata (r)
 		assert_equal (t.result, tostring (r))
+	end
+end
+
+function test_find()
+	for _,t in pairs (TestHostlist.find) do
+		assert_equal (t.result, hostlist.find (t.hl, t.host))
+		local h = hostlist.new (t.hl)
+		assert_userdata (h)
+		assert_equal (t.result, h:find(t.host))
 	end
 end
