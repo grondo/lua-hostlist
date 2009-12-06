@@ -23,11 +23,12 @@ Usage: %s [OPTION]... [HOSTLIST]...
   -d, --delimiters=S           Set output delimiter (default = ",")
   -u, --union                  Union of all HOSTLIST arguments
   -m, --minus                  Subtract all HOSTLIST args from first HOSTLIST
-  -i, --intersection           Intersection of two HOSTLIST args
+  -i, --intersection           Intersection of all HOSTLIST args
   -x, --exclude                Exclude all HOSTLIST args from first HOSTLIST
-  -X, --xor                    Symmetric difference (XOR) of all HOSTLIST args
+  -X, --xor                    Symmetric difference of all HOSTLIST args
   -D, --remove=N               Remove only N occurrences of args from HOSTLIST
   -f, --filter=CODE            Map Lua code CODE over all hosts
+  -F, --find=HOST              Output position of HOST in HOSTLIST
 
  An arbitrary number of HOSTLIST arguments are supported for all
   operations.  The default operation is to concatenate all HOSTLIST args.
@@ -73,7 +74,7 @@ function parse_cmdline (arg)
 	local alt_getopt = (require "alt_getopt")
 	local getopt     = alt_getopt.get_opts
 
-	local optstring = "hcen:d:D:f:s:umixX"
+	local optstring = "hcen:d:D:f:F:s:umixX"
 	local opt_table = {
 		help                 = "h",
 		count                = "c",
@@ -89,6 +90,7 @@ function parse_cmdline (arg)
 		xor                  = "X",
 		remove               = "D",
 		filter               = "f",
+		find                 = "F",
 	}
 
     return getopt (arg, optstring, opt_table)
@@ -217,6 +219,17 @@ end
 
 -- Filter result if requested
 if opts.f then hl = hl:map(opts.f()) end
+
+-- Find host in result if requested
+if opts.F then
+	local n = hl:find (opts.F)
+	if (n == nil) then
+		os.exit (1)
+	else
+		print (n) 
+		os.exit (0)
+	end
+end
 
 if (hl) then hostlist_output (opts, hl) end
 
