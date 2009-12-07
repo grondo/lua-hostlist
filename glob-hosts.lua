@@ -16,25 +16,30 @@ local usage    =
 Usage: %s [OPTION]... [HOSTLIST]...
 
   -h, --help                   Display this message.
+  -q, --quiet                  Quiet output (exit non-zero if empty hostlist).
+  -d, --delimiters=S           Set output delimiter (default = ",")
   -c, --count                  Print the number of hosts
   -s, --size=N                 Output at most N hosts (-N for last N hosts)
   -e, --expand                 Expand host list instead of collapsing
   -n, --nth=N                  Output the host at index N (-N to index from end)
-  -d, --delimiters=S           Set output delimiter (default = ",")
   -u, --union                  Union of all HOSTLIST arguments
   -m, --minus                  Subtract all HOSTLIST args from first HOSTLIST
   -i, --intersection           Intersection of all HOSTLIST args
   -x, --exclude                Exclude all HOSTLIST args from first HOSTLIST
   -X, --xor                    Symmetric difference of all HOSTLIST args
-  -D, --remove=N               Remove only N occurrences of args from HOSTLIST
-  -f, --filter=CODE            Map Lua code CODE over all hosts
-  -F, --find=HOST              Output position of HOST in HOSTLIST
+  -R, --remove=N               Remove only N occurrences of args from HOSTLIST
+  -f, --filter=CODE            Map Lua CODE over all hosts in result HOSTLIST
+  -F, --find=HOST              Output position of HOST in result HOSTLIST
+                                (exits non-zero if host not found)
 
  An arbitrary number of HOSTLIST arguments are supported for all
   operations.  The default operation is to concatenate all HOSTLIST args.
 
 ]]
 	
+-- Only one of the following options may be specified:
+local exclusive_options = { "u", "m", "i", "x", "X", "R" }
+
 --[[#########################################################################
 #
 #  Functions:
@@ -52,12 +57,16 @@ function log_msg (...)
 end
 
 function log_fatal (...)
-	log_msg (...)
+	local args = {...}
+	args[1] = "Fatal: " .. args[1]
+	log_msg (unpack(args))
 	os.exit (1)
 end
 
 function log_err (...)
-	log_msg ("Error: ".. ...)
+	local args = {...}
+	args[1] = "Error: " .. args[1]
+	log_msg (unpack(args))
 end
 
 function log_verbose (...)
@@ -74,9 +83,10 @@ function parse_cmdline (arg)
 	local alt_getopt = (require "alt_getopt")
 	local getopt     = alt_getopt.get_opts
 
-	local optstring = "hcen:d:D:f:F:s:umixX"
+	local optstring = "hqcen:d:R:f:F:s:umixX"
 	local opt_table = {
 		help                 = "h",
+		quiet                = "q",
 		count                = "c",
 		size                 = "s",
 		expand               = "e",
@@ -96,20 +106,27 @@ function parse_cmdline (arg)
     return getopt (arg, optstring, opt_table)
 end
 
+--
+--  Return the 
+--
 function convert_string_to_escape (s)
 	local t = { t='\t', n='\n', f='\f', v='\v', t='\t', r='\r',}
 	return s:sub(1,1) == '\\' and t[s:sub(2,2)] or s
 end
 
-function check_opts (opts, input)
+function check_opts (opts)
 	
+	--
+	--  Check that no more than one exlusive option was passed:
+	--
 	local n = 0
-	for _,opt in ipairs({u, m, i, x}) do
+	for _,opt in pairs(exclusive_options) do
 		if opts[opt] ~= nil then n = n + 1 end
 	end
 
 	if (n > 1) then
-		log_fatal ("Only one of -[umix] may be used")
+		log_fatal ("Only one of -[%s] may be used\n",
+				table.concat(exclusive_options))
 	end
 
 	--  Convert delimiter to escape sequence if necessary
@@ -118,6 +135,9 @@ function check_opts (opts, input)
 	--
 	opts.d = opts.d and convert_string_to_escape (opts.d) or ","
 
+	--
+	-- Compile filter function if one was supplied
+	-- 
 	if (opts.f ~= nil) then 
 		local fn, msg = loadstring ("return function (s) return "..opts.f.." end")
 		if (fn == nil) then
@@ -156,7 +176,11 @@ function hostlist_output (opts, hl)
 	hl:pop(sign * (n - math.abs(size)))
 
 	if opts.n then
-		print (hl[opts.n])
+		local host = hl[opts.n]
+		if (opts.q or host == nil) then os.exit (host and 0 or 1) end
+		print (host)
+	elseif opts.q then
+		os.exit (#hl and 0 or 1)
 	elseif opts.c then
 		print (#hl)
 	elseif opts.e then
@@ -182,6 +206,9 @@ local opts, optind = parse_cmdline (arg)
 
 if opts.h then display_usage () end
 
+-- Sanity check options:
+check_opts (opts, input)
+
 -- Get all hostlist arguments into a table (from either cmdline or stdin)
 if optind <= #arg then
 	input = hostlist_from_args (arg, optind)
@@ -189,9 +216,7 @@ else
 	input = hostlist_from_stdin ()
 end
 
--- Sanity check options:
-check_opts (opts, input)
-
+-- Handle options u, i, X, x, m, D
 if opts.u then
 	-- Union
 	hl = hostlist.union (unpack (input))
@@ -207,10 +232,10 @@ elseif opts.x then
 elseif opts.m then
 	--  Like delete, but treat hostlists as sets
 	hl = hostlist.delete (unpack (input)):uniq()
-elseif opts.D then
-	--  Delete the first N hosts (opts.D) from each hostlist
+elseif opts.R then
+	--  Delete the first N hosts (opts.R) from each hostlist
 	for _,v in pairs(input) do
-		hl = hl and hl:delete_n (v, opts.D) or hostlist.new (v)
+		hl = hl and hl:delete_n (v, opts.R) or hostlist.new (v)
 	end
 else
 	-- Default: Append all hosts
@@ -223,14 +248,11 @@ if opts.f then hl = hl:map(opts.f()) end
 -- Find host in result if requested
 if opts.F then
 	local n = hl:find (opts.F)
-	if (n == nil) then
-		os.exit (1)
-	else
-		print (n) 
-		os.exit (0)
-	end
+	if opts.q or n == nil then os.exit (n == nil and 1 or 0) end
+	print (n)
+	os.exit (0)
 end
 
-if (hl) then hostlist_output (opts, hl) end
+if (#hl > 0) then hostlist_output (opts, hl) else os.exit (1) end
 
 os.exit (0)

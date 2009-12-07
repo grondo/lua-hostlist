@@ -38,15 +38,15 @@ for host in h:next() do
 	print (host)
 end
 
--- The map function: Turn a hostlist into a table
+-- The expand function: Turn a hostlist into a table
 
-t = h:map()
+t = h:expand()
 
 printf ("h:map(): result has %d members", #t)
 
 -- Or call a function for each host
 
-t = h:map(print)
+t = h:expand(print)
 
 printf ("h:map(print): result has %d members",  #t)
 
@@ -57,7 +57,7 @@ l = hostlist.new ("a[1-5],b,a6")
 printf ("l = %s (%d hosts)", l.."", #l)
 
 -- Only return hosts that end in a digit
-t = l:map (function(s) return s:match("%d$") and s  end)
+t = l:expand (function(s) return s:match("%d$") and s  end)
 
 printf ("l:map(fn): %s (%d members)",
 		""..hostlist.new(table.concat(t, ",")), #t)
