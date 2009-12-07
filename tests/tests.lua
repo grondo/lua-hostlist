@@ -14,31 +14,38 @@ TestHostlist = {
 		["foo[1-5]"] =       "foo1,foo2,foo3,foo4,foo5",
 		["foo[0-4]-eth2"] =  "foo0-eth2,foo1-eth2,foo2-eth2,foo3-eth2,foo4-eth2",
 		["foo1,foo1,foo1"] = "foo1,foo1,foo1",
+		["[00-02]"] = "00,01,02",
 	},
 
 	counts = {
 		["foo[1,1,1]"] = 3,
 		["foo[1-100]"] = 100,
+		[""] = 0,
 	},
 
 	indeces = {
 		{ hl="foo[1-100]",  index=50,        result="foo50"            },
+		{ hl="foo[0-100]",  index=50,        result="foo49"            },
 	},
 
 	delete = {
-		{ hl="foo[1-5]",       delete="foo3",     result="foo[1-2,4-5]"     },
-		{ hl="foo[1,2,1]",     delete="foo1",     result="foo2"             },
-		{ hl="foo[1,1,1]",     delete="foo1",     result=""                 },
-		{ hl="foo[2-5],fooi",  delete="foo[1-2]", result="foo[3-5],fooi"    },
-		{ hl="[99-105]",       delete="101",      result="[99-100,102-105]" },
+		{ hl="foo[1-5]",       args={"foo3"},     result="foo[1-2,4-5]"     },
+		{ hl="foo[1,2,1]",     args={"foo1"},     result="foo2"             },
+		{ hl="foo[1,1,1]",     args={"foo1"},     result=""                 },
+		{ hl="foo[2-5],fooi",  args={"foo[1-2]"}, result="foo[3-5],fooi"    },
+		{ hl="[99-105]",       args={"101"},      result="[99-100,102-105]" },
+		{ hl="[099-105]",      args={"101"},      result="[099-100,102-105]" },
+		{ hl="foo[1-10]",      args={"foo[1-2]","foo3","foo10"},
+			                 result="foo[4-9]" },
 
 	},
 
 	["delete_n"] = {
-		{ hl="foo[1,1,2,1]",  delete="foo1",   n=1, result="foo[1-2,1]"    },
-		{ hl="foo[1,1,2,1]",  delete="foo1",   n=2, result="foo[2,1]"   },
-		{ hl="foo[1,1,2,1]",  delete="foo1",   n=3, result="foo2"    },
-		{ hl="foo[1,1,2,1]",  delete="foo1",   n=0, result="foo2"    },
+		{ hl="foo[1,1,2,1]",  delete="foo1",   n=1, result="foo[1-2,1]"      },
+		{ hl="foo[1,1,2,1]",  delete="foo1",   n=2, result="foo[2,1]"        },
+		{ hl="foo[1,1,2,1]",  delete="foo1",   n=3, result="foo2"            },
+		{ hl="foo[1,1,2,1]",  delete="foo1",   n=0, result="foo2"            },
+		{ hl="foo[1,1,2,1]",  delete="foo3",   n=0, result="foo[1,1-2,1]"    },
 	},
 
 	subtract = {
@@ -63,6 +70,7 @@ TestHostlist = {
 
 	intersect = {
 		{ hl = "foo[1-100]", arg = "foo[2-101]", result = "foo[2-100]" },
+		{ hl = "[0-5]",      arg = "4",          result = "4" },
 	},
 
 	next = {
@@ -91,6 +99,10 @@ TestHostlist = {
 function test_new_nil_args()
 	assert_userdata (hostlist.new())
 	assert_userdata (hostlist.new(nil))
+	assert_equal (0, hostlist.new():count())
+	local hl = hostlist.new()
+	hl:concat ("")
+	assert_equal (0, #hl)
 end
 
 
@@ -134,9 +146,13 @@ end
 
 function test_count()
 	for s,cnt in pairs (TestHostlist.counts) do
+
+		assert_equal (cnt, hostlist.count(s))
+
 		local h = hostlist.new (s)
 		assert_userdata (h)
 		assert_equal (cnt, #h)
+		assert_equal (cnt, h:count())
 	end
 end
 
@@ -164,8 +180,11 @@ function test_delete()
 	for _,t in pairs (TestHostlist.delete) do
 		local hl = hostlist.new (t.hl)
 		assert_userdata (hl)
-		hl:delete (t.delete)
+		hl:delete (unpack(t.args))
 		assert_equal (t.result, tostring (hl))
+
+		local s = hostlist.delete (t.hl, unpack (t.args))
+		assert_equal (t.result, tostring (s))
 	end
 end
 
