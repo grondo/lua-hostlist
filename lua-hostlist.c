@@ -139,9 +139,6 @@ static int l_hostlist_destroy (lua_State *L)
 {
     hostlist_t hl = lua_tohostlist (L, 1);
     lua_pop (L, 1);
-
-    fprintf (stderr, "l_hostlist_destroy\n");
-
     hostlist_destroy (hl);
     return (0);
 }
