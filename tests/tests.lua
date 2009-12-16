@@ -93,6 +93,7 @@ TestHostlist = {
 		{ hl="i[00-05]",        host="i00",         result=1   }, 
 		{ hl="i[00-05]",        host="i03",         result=4   }, 
 		{ hl="[00-05]i",        host="00",          result=nil }, 
+		{ hl="f00[1-5]",        host="f001",        result=1   }, 
 	},
 }
 
