@@ -1,5 +1,5 @@
 /*****************************************************************************\
- *  $Id: hostlist.c 7685 2008-08-07 00:05:52Z grondo $
+ *  $Id: hostlist.c 9950 2010-08-31 21:57:35Z grondo $
  *****************************************************************************
  *  Copyright (C) 2002 The Regents of the University of California.
  *  Produced at Lawrence Livermore National Laboratory (cf, DISCLAIMER).
@@ -350,21 +350,6 @@ static void _error(char *file, int line, char *msg, ...)
     return;
 }
 
-static int _advance_past_brackets (char *tok, char **str)
-{
-    /* if _single_ opening bracket exists b/w tok and str, push str
-     * past first closing bracket to next seperator */
-    if (   memchr(tok, '[', *str - tok) != NULL
-        && memchr(tok, ']', *str - tok) == NULL ) {
-        char *q = strchr(*str, ']');
-        if (q && memchr(*str, '[', q - *str) == NULL) {
-            *str = q + 1;
-            return (1);
-        }
-    }
-
-    return 0;
-}
 
 /* 
  * Helper function for host list string parsing routines 
@@ -375,10 +360,13 @@ static int _advance_past_brackets (char *tok, char **str)
  * (with modifications to support bracketed hostlists, i.e.:
  *  xxx[xx,xx,xx] is a single token)
  *
+ * _next_tok now handles multiple brackets within the same token,
+ * e.g.  node[01-30]-[1-2,6].
  */
 static char * _next_tok(char *sep, char **str)
 {
     char *tok;
+    int level = 0;
 
     /* push str past any leading separators */
     while (**str != '\0' && strchr(sep, **str) != '\0')
@@ -390,17 +378,13 @@ static char * _next_tok(char *sep, char **str)
     /* assign token ptr */
     tok = *str;
 
-    /*
-     * Advance str past any separators, but if a separator occurs between
-     *  brackets, e.g. foo[0-3,5], then advance str past closing brackets and
-     *  try again.
-     */
-    do {
-        /* push str past token and leave pointing to first separator */
-        while (**str != '\0' && strchr(sep, **str) == '\0')
-            (*str)++;
-    } while (_advance_past_brackets (tok, str));
-
+    while ( **str != '\0' && 
+	    (level != 0 || strchr(sep, **str) == NULL) ) {
+      if ( **str == '[' ) level++;
+      else if ( **str == ']' ) level--;
+      (*str)++;
+    }
+    
    /* nullify consecutive separators and push str beyond them */
     while (**str != '\0' && strchr(sep, **str) != '\0')
         *(*str)++ = '\0';

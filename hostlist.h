@@ -405,11 +405,6 @@ int hostset_within(hostset_t set, const char *hosts);
  */
 char * hostset_shift(hostset_t set);
 
-/* hostset_pop()
- * hostset equivalent to hostlist_pop()
- */
-char * hostset_pop(hostset_t set);
-
 /* hostset_shift_range():
  * hostset eqivalent to hostlist_shift_range()
  */
