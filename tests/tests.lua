@@ -73,6 +73,10 @@ TestHostlist = {
 		{ hl = "[0-5]",      arg = "4",          result = "4" },
 	},
 
+	union = {
+		{ hl= { "16", "25" },	result="[16,25]" },
+	},
+
 	next = {
 		"foo[1-50]", "", "foo[1,1,1]",
 	},
@@ -220,6 +224,13 @@ function test_intersect()
 	end
 end
 
+function test_union()
+	for _,t in pairs (TestHostlist.union) do
+		local h = hostlist.union (unpack(t.hl))
+		assert_userdata (h)
+		assert_equal (t.result, tostring (h))
+	end
+end
 
 function test_subtract()
 	for _,t in pairs (TestHostlist.subtract) do
