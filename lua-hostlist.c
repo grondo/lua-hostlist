@@ -448,7 +448,7 @@ static int l_hostlist_union (lua_State *L)
 
     r = hostlist_create (NULL);
 
-    for (i = 1; i < nargs; i++)
+    for (i = 1; i <= nargs; i++)
         hostlist_push_list (r, lua_string_to_hostlist (L, i));
 
     lua_pop (L, 0);
