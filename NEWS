@@ -1,0 +1,7 @@
+Version 0.2 (2011-11-10):
+- Fix bug in hostlist.union() that dropped final argument.
+- Update to latest hostlist C code.
+- Add hostlist -S, --sort
+
+Version 0.1 (2010-01-25):
+- Initial release
