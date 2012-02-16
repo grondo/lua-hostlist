@@ -22,7 +22,7 @@ check: hostlist.so
 
 install:
 	install -D -m0644 hostlist.so $(DESTDIR)$(LUA_OBJDIR)/hostlist.so
-	install -D -m0655 hostlist $(DESTDIR)$(PREFIX)/bin/hostlist
+	install -D -m0755 hostlist $(DESTDIR)$(PREFIX)/bin/hostlist
 
 clean:
 	-rm -f *.o *.so
