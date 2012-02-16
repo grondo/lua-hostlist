@@ -1,3 +1,6 @@
+Version 0.3 (2012-02-16):
+- Fix permissions on installed /usr/bin/hostlist.
+
 Version 0.2 (2011-11-10):
 - Fix bug in hostlist.union() that dropped final argument.
 - Update to latest hostlist C code.
