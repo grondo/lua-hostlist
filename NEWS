@@ -1,3 +1,7 @@
+Version 0.4 (2012-10-03):
+- Fix bug in hostlist find when prefix of hostname partially matches
+  a prefix in the hostlist (e.g. hostlist --find=foo2 foo1-p2).
+
 Version 0.3 (2012-02-16):
 - Fix permissions on installed /usr/bin/hostlist.
 
