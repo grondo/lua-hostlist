@@ -17,13 +17,17 @@ Installation
 
 In most cases a simple
 
+```sh
  make && make install
+```
 
 should work. This will result in installation of the Lua module
 `hostlist.so` into /usr/local/lib. The location of installation can
 be controlled with `PREFIX` `LIBDIR` and `LUA_VER`, e.g.
 
+```sh
  PREFIX=/usr LIBDIR=/usr/lib64 LUA_VER=5.1 make install
+```
 
 will install into `/usr/lib64/lua/5.1`.
 
@@ -35,12 +39,15 @@ for the lua bindings, but may also be found to be a useful tool in
 its own right. By default `hostlist` concatenates all hosts given
 either on the commandline or via STDIN:
 
+```sh
  $ hostlist foo[1-4] foo[5-10]
  foo[1-10]
+```
 
 Other operations such as count, union, intersection, exclusive or, etc.
 are supported:
 
+```
  Usage: hostlist [OPTION]... [HOSTLIST]...
 
   -h, --help                   Display this message.
@@ -60,6 +67,7 @@ are supported:
   -f, --filter=CODE            Map Lua CODE over all hosts in result HOSTLIST
   -F, --find=HOST              Output position of HOST in result HOSTLIST
                                 (exits non-zero if host not found)
+```
 
  An arbitrary number of HOSTLIST arguments are supported for all
   operations.  The default operation is to concatenate all HOSTLIST args.
