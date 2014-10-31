@@ -22,6 +22,9 @@
 
 LIBDIR ?=      /usr/local/lib
 LUA_OBJDIR ?=  $(LIBDIR)/lua/$(LUA_VER)
+
+INCLUDEDIR ?=  /usr/include
+LUA_INCLUDEDIR ?= $(INCLUDEDIR)/lua$(LUA_VER)
 PREFIX ?=      /usr/local
 
 
@@ -32,7 +35,7 @@ hostlist_OBJS = hostlist.o lua-hostlist.o
 .SUFFIXES: .c .o .so
 
 .c.o:
-	$(CC) -fPIC -g -Wall -c $<
+	$(CC) -I$(LUA_INCLUDEDIR) -fPIC -g -Wall -c $<
 
 hostlist.so: $(hostlist_OBJS)
 	$(CC) -shared -o $*.so $^ $(LDFLAGS) $(LIBS)
