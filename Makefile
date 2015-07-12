@@ -20,12 +20,17 @@
 ## <http://www.gnu.org/licenses/>.
 ##*****************************************************************************
 
+LUA_VER ?=     $(shell lua -e 'print(_VERSION:match("Lua (.*)"))')
 LIBDIR ?=      /usr/local/lib
 LUA_OBJDIR ?=  $(LIBDIR)/lua/$(LUA_VER)
 
 INCLUDEDIR ?=  /usr/include
 LUA_INCLUDEDIR ?= $(INCLUDEDIR)/lua$(LUA_VER)
 PREFIX ?=      /usr/local
+
+ifeq ($(LUA_VER),5.1)
+    NEED_LUAL_SETFUNCS = 1
+endif
 
 
 all: hostlist.so
