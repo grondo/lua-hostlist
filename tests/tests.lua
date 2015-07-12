@@ -27,7 +27,7 @@
 
 
 require "lunit"
-require "hostlist"
+local hostlist = require "hostlist"
 
 module ("TestHostlist", lunit.testcase, package.seeall) 
 
