@@ -20,32 +20,47 @@
 ## <http://www.gnu.org/licenses/>.
 ##*****************************************************************************
 
-LIBDIR ?=      /usr/local/lib
-LUA_OBJDIR ?=  $(LIBDIR)/lua/$(LUA_VER)
+LUA        ?= lua
+LUA_VER    ?= $(shell $(LUA) -e 'print (_VERSION:match("Lua (.+)") )')
+LIBDIR     ?= /usr/local/lib
+LUA_OBJDIR ?= $(LIBDIR)/lua/$(LUA_VER)
+PREFIX     ?= /usr/local
 
-INCLUDEDIR ?=  /usr/include
-LUA_INCLUDEDIR ?= $(INCLUDEDIR)/lua$(LUA_VER)
-PREFIX ?=      /usr/local
+LUA_PKG_NAME := $(shell \
+	   (pkg-config --exists lua$(LUA_VER) && echo lua$(LUA_VER)) \
+	|| (pkg-config --exists lua && echo lua) )
 
+ifeq ($(LUA_PKG_NAME),)
+	$(error "No Lua pkg-config file found!")
+endif
 
-all: hostlist.so
+LUA_CFLAGS := $(shell pkg-config --cflags $(LUA_PKG_NAME))
+LUA_LIBS :=   $(shell pkg-config --libs $(LUA_PKG_NAME))
 
-hostlist_OBJS = hostlist.o lua-hostlist.o
+override CFLAGS+=  -Wall -ggdb $(LUA_CFLAGS)
+override LDFLAGS+= $(LUA_LIBS)
 
 .SUFFIXES: .c .o .so
 
 .c.o:
-	$(CC) -I$(LUA_INCLUDEDIR) -fPIC -g -Wall -c $<
+	$(CC) $(CFLAGS) -o $@ -fPIC -c $<
 
-hostlist.so: $(hostlist_OBJS)
-	$(CC) -shared -o $*.so $^ $(LDFLAGS) $(LIBS)
+hostlist.so: hostlist.o lua-hostlist.o
+	$(CC) -shared -o $*.so $^ $(LDFLAGS)
+
+check-coverage:
+	make clean
+	make CFLAGS="-fprofile-arcs -ftest-coverage" LDFLAGS="-lgcov"
+	make check
+	gcov lua-hostlist.c
+	gcov hostlist.c
 
 check: hostlist.so
-	@(cd tests && LUA_CPATH=../?.so ./lunit tests.lua)
+	./tests/lunit -i $(LUA) tests/tests.lua
 
 install:
 	install -D -m0644 hostlist.so $(DESTDIR)$(LUA_OBJDIR)/hostlist.so
 	install -D -m0755 hostlist $(DESTDIR)$(PREFIX)/bin/hostlist
 
 clean:
-	-rm -f *.o *.so
+	rm -f *.so *.o *.gcov *.gcda *.gcno *.core
