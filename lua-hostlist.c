@@ -826,7 +826,7 @@ static const struct luaL_Reg hostlist_iterator_methods [] = {
 
 int luaopen_hostlist (lua_State *L)
 {
-	luaL_newmetatable (L, "Hostlist");
+    luaL_newmetatable (L, "Hostlist");
 
     /*  Register hostlist methods in metatable */
     luaL_register (L, NULL, hostlist_methods);
@@ -835,7 +835,7 @@ int luaopen_hostlist (lua_State *L)
     luaL_register (L, NULL, hostlist_iterator_methods);
 
     /*  Register hostlist public table functions: */
-	luaL_register (L, "hostlist", hostlist_functions);
+    luaL_register (L, "hostlist", hostlist_functions);
 
     return 1;
 }
