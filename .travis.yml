@@ -1,0 +1,29 @@
+language: c
+sudo: false
+compiler:
+  - gcc
+  - clang
+  - gcc+coverage
+
+env:
+  - LUA=lua5.1
+  - LUA=lua5.2
+
+addons:
+  apt:
+    sources:
+    packages:
+     - lua5.2
+     - lua5.1
+     - liblua5.1-0-dev
+     - liblua5.2-dev
+
+before_install:
+  - case "$CC" in *+coverage) CC=${CC//+*}; export COVERAGE=t;; esac
+  - if test "$COVERAGE" = "t"; then pip install --user cpp-coveralls; fi
+
+script:
+  - if test "$COVERAGE" = "t"; then make check-coverage; else make check; fi
+
+after_success:
+  - if test "$COVERAGE" = "t"; then coveralls --gcov-options '\-lp'; fi
