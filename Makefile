@@ -25,6 +25,7 @@ LUA_VER    ?= $(shell $(LUA) -e 'print (_VERSION:match("Lua (.+)") )')
 LIBDIR     ?= /usr/local/lib
 LUA_OBJDIR ?= $(LIBDIR)/lua/$(LUA_VER)
 PREFIX     ?= /usr/local
+OS := $(shell uname -s 2>/dev/null || echo Unknown)
 
 LUA_PKG_NAME := $(shell \
 	   (pkg-config --exists lua$(LUA_VER) && echo lua$(LUA_VER)) \
@@ -59,8 +60,14 @@ check: hostlist.so
 	./tests/lunit -i $(LUA) tests/tests.lua
 
 install:
+ifeq ($(OS),Darwin)
+	install -d -m0755 $(DESTDIR)$(LUA_OBJDIR)
+	install -c -m0644 hostlist.so $(DESTDIR)$(LUA_OBJDIR)/hostlist.so
+	install -c -m0755 hostlist $(DESTDIR)$(PREFIX)/bin/hostlist
+else
 	install -D -m0644 hostlist.so $(DESTDIR)$(LUA_OBJDIR)/hostlist.so
 	install -D -m0755 hostlist $(DESTDIR)$(PREFIX)/bin/hostlist
+endif
 
 clean:
 	rm -f *.so *.o *.gcov *.gcda *.gcno *.core

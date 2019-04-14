@@ -1,4 +1,4 @@
-#!/usr/bin/lua 
+#!/usr/bin/env lua
 --[[#######################################################################
  #
  #  hostlist.lua, a glob-hosts implemetation (slightly modified) in lua.
@@ -58,6 +58,15 @@ Usage: %s [OPTION]... [HOSTLIST]...
 	
 -- Only one of the following options may be specified:
 local exclusive_options = { "u", "m", "i", "x", "X", "R" }
+
+-- If we are using a newer version of lua
+-- unpack has moved to the table library
+-- lua5.1
+local unpack = unpack
+if not unpack then
+   -- lua5.3
+   unpack = table.unpack
+end
 
 --[[#########################################################################
 #
