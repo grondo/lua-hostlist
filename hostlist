@@ -431,7 +431,10 @@ elseif opts.R then
 	end
 else
 	-- Default: Append all hosts
-	hl = hostlist.concat (unpack (input))
+	hl = hostlist.new()
+	for _, arg in ipairs (input) do
+		hl:concat (arg)
+	end
 end
 
 -- Filter result if requested
