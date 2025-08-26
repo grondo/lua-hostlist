@@ -29,6 +29,13 @@
 local hostlist = require ("hostlist")
 local prog     = string.match (arg[0], "([^/]+)$")
 
+-- Some functions in Lua < 5.2 moved from global into a table.
+-- Make them global again here for backwards compatibility:
+if _VERSION >= 'Lua 5.2' then
+    unpack   = table.unpack
+    loadstring = load
+end
+
 local usage    =
 [[
 Usage: %s [OPTION]... [HOSTLIST]...
