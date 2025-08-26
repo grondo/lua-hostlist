@@ -59,7 +59,7 @@ check: hostlist.so
 	LUA_PATH="$(LUA_PATH);tests/?.lua" $(LUA) tests/tests.lua
 
 install:
-	install -D -m0644 hostlist.so $(DESTDIR)$(LUA_OBJDIR)/hostlist.so
+	install -D -m0755 hostlist.so $(DESTDIR)$(LUA_OBJDIR)/hostlist.so
 	install -D -m0755 hostlist $(DESTDIR)$(PREFIX)/bin/hostlist
 
 clean:
