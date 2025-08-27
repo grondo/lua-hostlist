@@ -26,10 +26,16 @@
 --#########################################################################--]]
 
 
-require "lunit"
+lunit = require "lunitx"
 local hostlist = require "hostlist"
 
-module ("TestHostlist", lunit.testcase, package.seeall) 
+if _VERSION >= 'Lua 5.2' then
+    _ENV = lunit.module('TestHostlist', 'seeall')
+    unpack = table.unpack
+    loadstring = load
+else
+    module ("TestHostlist", lunit.testcase, package.seeall) 
+end
 
 TestHostlist = {
 

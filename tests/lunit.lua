@@ -1,15 +1,16 @@
-
 --[[--------------------------------------------------------------------------
 
-    This file is part of lunit 0.5.
+    This file is part of lunitx.
 
     For Details about lunit look at: http://www.mroth.net/lunit/
+    For Details about lunitx look at: https://github.com/dcurrie/lunit
 
     Author: Michael Roth <mroth@nessie.de>
 
-    Copyright (c) 2004, 2006-2009 Michael Roth <mroth@nessie.de>
+    Copyright (c) 2004, 2006-2010 Michael Roth <mroth@nessie.de>
+    Copyright (c) 2011-2012 Doug Currie
 
-    Permission is hereby granted, free of charge, to any person 
+    Permission is hereby granted, free of charge, to any person
     obtaining a copy of this software and associated documentation
     files (the "Software"), to deal in the Software without restriction,
     including without limitation the rights to use, copy, modify, merge,
@@ -17,7 +18,7 @@
     and to permit persons to whom the Software is furnished to do so,
     subject to the following conditions:
 
-    The above copyright notice and this permission notice shall be 
+    The above copyright notice and this permission notice shall be
     included in all copies or substantial portions of the Software.
 
     THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
@@ -31,8 +32,6 @@
 --]]--------------------------------------------------------------------------
 
 
-
-
 local orig_assert     = assert
 
 local pairs           = pairs
@@ -41,19 +40,60 @@ local next            = next
 local type            = type
 local error           = error
 local tostring        = tostring
+local setmetatable    = setmetatable
+local pcall           = pcall
+local xpcall          = xpcall
+local require         = require
+local loadfile        = loadfile
 
 local string_sub      = string.sub
+local string_gsub     = string.gsub
 local string_format   = string.format
+local string_lower    = string.lower
+local string_find     = string.find
 
+local table_concat    = table.concat
 
-module("lunit", package.seeall)     -- FIXME: Remove package.seeall
+local debug_getinfo   = debug.getinfo
+local package         = require "package"
+local setfenv         = setfenv
 
-local lunit = _M
+local _G = _G
+
+local IS_LUA52 = _VERSION >= 'Lua 5.2'
+
+local lunit
+
+local module = _G.module
+
+local function TEST_CASE(name)
+  if not IS_LUA52 then
+    module(name, package.seeall, lunit.testcase)
+    setfenv(2, _M)
+    return _M
+  else
+    return lunit.module(name, 'seeall')
+  end
+end
+
+if IS_LUA52 then
+
+    lunit = {}
+    _ENV = lunit
+
+else
+
+    module("lunit")
+    lunit = _M
+
+end
+
+lunit.TEST_CASE = TEST_CASE
 
 local __failure__ = {}    -- Type tag for failed assertions
+local __skip__    = {}    -- Type tag for skipped tests
 
 local typenames = { "nil", "boolean", "number", "string", "table", "function", "thread", "userdata" }
-
 
 
 local traceback_hide      -- Traceback function which hides lunit internals
@@ -66,15 +106,15 @@ do
   end
 
   local function my_traceback(errobj)
-    if is_table(errobj) and errobj.type == __failure__ then
-      local info = debug.getinfo(5, "Sl")   -- FIXME: Hardcoded integers are bad...
+    if is_table(errobj) and ((errobj.type == __failure__) or (errobj.type == __skip__)) then
+      local info = debug_getinfo(5, "Sl")   -- FIXME: Hardcoded integers are bad...
       errobj.where = string_format( "%s:%d", info.short_src, info.currentline)
     else
       errobj = { msg = tostring(errobj) }
       errobj.tb = {}
       local i = 2
       while true do
-        local info = debug.getinfo(i, "Snlf")
+        local info = debug_getinfo(i, "Snlf")
         if not is_table(info) then
           break
         end
@@ -95,7 +135,7 @@ do
               line[#line+1] = string_format(" in function <%s:%d>", info.short_src, info.linedefined)
             end
           end
-          errobj.tb[#errobj.tb+1] = table.concat(line)
+          errobj.tb[#errobj.tb+1] = table_concat(line)
         end
         i = i + 1
       end
@@ -133,6 +173,7 @@ local is_userdata = is_userdata
 
 
 local function failure(name, usermsg, defaultmsg, ...)
+  if usermsg then usermsg = tostring(usermsg) end
   local errobj = {
     type    = __failure__,
     name    = name,
@@ -142,6 +183,18 @@ local function failure(name, usermsg, defaultmsg, ...)
   error(errobj, 0)
 end
 traceback_hide( failure )
+
+local function _skip(name, usermsg, defaultmsg, ...)
+  if usermsg then usermsg = tostring(usermsg) end
+  local errobj = {
+    type    = __skip__,
+    name    = name,
+    msg     = string_format(defaultmsg,...),
+    usermsg = usermsg
+  }
+  error(errobj, 0)
+end
+traceback_hide( _skip )
 
 
 local function format_arg(arg)
@@ -156,6 +209,57 @@ local function format_arg(arg)
 end
 
 
+local selected
+do
+  local conv = {
+    ["^"] = "%^",
+    ["$"] = "%$",
+    ["("] = "%(",
+    [")"] = "%)",
+    ["%"] = "%%",
+    ["."] = "%.",
+    ["["] = "%[",
+    ["]"] = "%]",
+    ["+"] = "%+",
+    ["-"] = "%-",
+    ["?"] = ".",
+    ["*"] = ".*"
+  }
+
+  local function lunitpat2luapat(str)
+    --return "^" .. string.gsub(str, "%W", conv) .. "$"
+    -- Above was very annoying, if I want to run all the tests having to do with
+    -- RSS, I want to be able to do "-t rss"   not "-t \*rss\*".
+    return string_gsub(str, "%W", conv)
+  end
+
+  local function in_patternmap(map, name)
+    if map[name] == true then
+      return true
+    else
+      for _, pat in ipairs(map) do
+        if string_find(name, pat) then
+          return true
+        end
+      end
+    end
+    return false
+  end
+
+  selected = function (map, name)
+    if not map then
+      return true
+    end
+
+    local m = {}
+    for k,v in pairs(map) do
+      m[k] = lunitpat2luapat(v)
+    end
+    return in_patternmap(m, name)
+  end
+end
+
+
 function fail(msg)
   stats.assertions = stats.assertions + 1
   failure( "fail", msg, "failure" )
@@ -163,96 +267,91 @@ end
 traceback_hide( fail )
 
 
-function assert(assertion, msg)
+function skip(msg)
+  stats.assertions = stats.assertions + 1
+  _skip( "skip", msg, "skip" )
+end
+traceback_hide( skip )
+
+
+function assert(assertion, ...)
   stats.assertions = stats.assertions + 1
   if not assertion then
-    failure( "assert", msg, "assertion failed" )
+    failure( "assert", (...), "assertion failed" )
   end
-  return assertion
+  return assertion, ...
 end
 traceback_hide( assert )
 
 
-function assert_true(actual, msg)
+function assert_true(actual, ...)
   stats.assertions = stats.assertions + 1
-  local actualtype = type(actual)
-  if actualtype ~= "boolean" then
-    failure( "assert_true", msg, "true expected but was a "..actualtype )
-  end
   if actual ~= true then
-    failure( "assert_true", msg, "true expected but was false" )
+    failure( "assert_true", (...), "true expected but was %s", format_arg(actual) )
   end
-  return actual
+  return actual, ...
 end
 traceback_hide( assert_true )
 
 
-function assert_false(actual, msg)
+function assert_false(actual, ...)
   stats.assertions = stats.assertions + 1
-  local actualtype = type(actual)
-  if actualtype ~= "boolean" then
-    failure( "assert_false", msg, "false expected but was a "..actualtype )
-  end
   if actual ~= false then
-    failure( "assert_false", msg, "false expected but was true" )
+    failure( "assert_false", (...), "false expected but was %s", format_arg(actual) )
   end
-  return actual
+  return actual, ...
 end
 traceback_hide( assert_false )
 
 
-function assert_equal(expected, actual, msg)
+function assert_equal(expected, actual, ...)
   stats.assertions = stats.assertions + 1
   if expected ~= actual then
-    failure( "assert_equal", msg, "expected %s but was %s", format_arg(expected), format_arg(actual) )
+    failure( "assert_equal", (...), "expected %s but was %s", format_arg(expected), format_arg(actual) )
   end
-  return actual
+  return actual, ...
 end
 traceback_hide( assert_equal )
 
 
-function assert_not_equal(unexpected, actual, msg)
+function assert_not_equal(unexpected, actual, ...)
   stats.assertions = stats.assertions + 1
   if unexpected == actual then
-    failure( "assert_not_equal", msg, "%s not expected but was one", format_arg(unexpected) )
+    failure( "assert_not_equal", (...), "%s not expected but was one", format_arg(unexpected) )
   end
-  return actual
+  return actual, ...
 end
 traceback_hide( assert_not_equal )
 
 
-function assert_match(pattern, actual, msg)
+function assert_match(pattern, actual, ...)
   stats.assertions = stats.assertions + 1
-  local patterntype = type(pattern)
-  if patterntype ~= "string" then
-    failure( "assert_match", msg, "expected the pattern as a string but was a "..patterntype )
+  if type(pattern) ~= "string" then
+    failure( "assert_match", (...), "expected a string as pattern but was %s", format_arg(pattern) )
   end
-  local actualtype = type(actual)
-  if actualtype ~= "string" then
-    failure( "assert_match", msg, "expected a string to match pattern '%s' but was a %s", pattern, actualtype )
+  if type(actual) ~= "string" then
+    failure( "assert_match", (...), "expected a string to match pattern '%s' but was a %s", pattern, format_arg(actual) )
   end
-  if not string.find(actual, pattern) then
-    failure( "assert_match", msg, "expected '%s' to match pattern '%s' but doesn't", actual, pattern )
+  if not string_find(actual, pattern) then
+    failure( "assert_match", (...), "expected '%s' to match pattern '%s' but doesn't", actual, pattern )
   end
-  return actual
+  return actual, ...
 end
 traceback_hide( assert_match )
 
 
-function assert_not_match(pattern, actual, msg)
+function assert_not_match(pattern, actual, ...)
   stats.assertions = stats.assertions + 1
-  local patterntype = type(pattern)
-  if patterntype ~= "string" then
-    failure( "assert_not_match", msg, "expected the pattern as a string but was a "..patterntype )
+  if type(pattern) ~= "string" then
+    failure( "assert_not_match", (...), "expected a string as pattern but was %s", format_arg(pattern) )
   end
-  local actualtype = type(actual)
-  if actualtype ~= "string" then
-    failure( "assert_not_match", msg, "expected a string to not match pattern '%s' but was a %s", pattern, actualtype )
+  if type(actual) ~= "string" then
+    failure( "assert_not_match", (...), "expected a string to not match pattern '%s' but was %s", pattern, format_arg(actual) )
   end
-  if string.find(actual, pattern) then
-    failure( "assert_not_match", msg, "expected '%s' to not match pattern '%s' but it does", actual, pattern )
+  if string_find(actual, pattern) then
+    failure( "assert_not_match", (...), "expected '%s' to not match pattern '%s' but it does", actual, pattern )
   end
-  return actual
+  return actual, ...
 end
 traceback_hide( assert_not_match )
 
@@ -262,9 +361,8 @@ function assert_error(msg, func)
   if func == nil then
     func, msg = msg, nil
   end
-  local functype = type(func)
-  if functype ~= "function" then
-    failure( "assert_error", msg, "expected a function as last argument but was a "..functype )
+  if type(func) ~= "function" then
+    failure( "assert_error", msg, "expected a function as last argument but was %s", format_arg(func) )
   end
   local ok, errmsg = pcall(func)
   if ok then
@@ -279,23 +377,20 @@ function assert_error_match(msg, pattern, func)
   if func == nil then
     msg, pattern, func = nil, msg, pattern
   end
-  local patterntype = type(pattern)
-  if patterntype ~= "string" then
-    failure( "assert_error_match", msg, "expected the pattern as a string but was a "..patterntype )
+  if type(pattern) ~= "string" then
+    failure( "assert_error_match", msg, "expected the pattern as a string but was %s", format_arg(pattern) )
   end
-  local functype = type(func)
-  if functype ~= "function" then
-    failure( "assert_error_match", msg, "expected a function as last argument but was a "..functype )
+  if type(func) ~= "function" then
+    failure( "assert_error_match", msg, "expected a function as last argument but was %s", format_arg(func) )
   end
   local ok, errmsg = pcall(func)
   if ok then
     failure( "assert_error_match", msg, "error expected but no error occurred" )
   end
-  local errmsgtype = type(errmsg)
-  if errmsgtype ~= "string" then
-    failure( "assert_error_match", msg, "error as string expected but was a "..errmsgtype )
+  if type(errmsg) ~= "string" then
+    failure( "assert_error_match", msg, "error as string expected but was %s", format_arg(errmsg) )
   end
-  if not string.find(errmsg, pattern) then
+  if not string_find(errmsg, pattern) then
     failure( "assert_error_match", msg, "expected error '%s' to match pattern '%s' but doesn't", errmsg, pattern )
   end
 end
@@ -307,9 +402,8 @@ function assert_pass(msg, func)
   if func == nil then
     func, msg = msg, nil
   end
-  local functype = type(func)
-  if functype ~= "function" then
-    failure( "assert_pass", msg, "expected a function as last argument but was a %s", functype )
+  if type(func) ~= "function" then
+    failure( "assert_pass", msg, "expected a function as last argument but was %s", format_arg(func) )
   end
   local ok, errmsg = pcall(func)
   if not ok then
@@ -323,13 +417,12 @@ traceback_hide( assert_pass )
 
 for _, typename in ipairs(typenames) do
   local assert_typename = "assert_"..typename
-  lunit[assert_typename] = function(actual, msg)
+  lunit[assert_typename] = function(actual, ...)
     stats.assertions = stats.assertions + 1
-    local actualtype = type(actual)
-    if actualtype ~= typename then
-      failure( assert_typename, msg, typename.." expected but was a "..actualtype )
+    if type(actual) ~= typename then
+      failure( assert_typename, (...), "%s expected but was %s", typename, format_arg(actual) )
     end
-    return actual
+    return actual, ...
   end
   traceback_hide( lunit[assert_typename] )
 end
@@ -339,11 +432,12 @@ end
 
 for _, typename in ipairs(typenames) do
   local assert_not_typename = "assert_not_"..typename
-  lunit[assert_not_typename] = function(actual, msg)
+  lunit[assert_not_typename] = function(actual, ...)
     stats.assertions = stats.assertions + 1
     if type(actual) == typename then
-      failure( assert_not_typename, msg, typename.." not expected but was one" )
+      failure( assert_not_typename, (...), typename.." not expected but was one" )
     end
+    return actual, ...
   end
   traceback_hide( lunit[assert_not_typename] )
 end
@@ -355,6 +449,7 @@ function lunit.clearstats()
     passed      = 0;
     failed      = 0;
     errors      = 0;
+    skipped     = 0;
   }
 end
 
@@ -383,6 +478,10 @@ do
     return setrunner(runner)
   end
 
+  function lunit.getrunner()
+    return testrunner
+  end
+
   function report(event, ...)
     local f = testrunner and testrunner[event]
     if is_function(f) then
@@ -400,13 +499,15 @@ do
     if errobj.type == __failure__ then
       stats.failed = stats.failed + 1
       report("fail", fullname, errobj.where, errobj.msg, errobj.usermsg)
+    elseif errobj.type == __skip__ then
+      stats.skipped = stats.skipped + 1
+      report("skip", fullname, errobj.where, errobj.msg, errobj.usermsg)
     else
       stats.errors = stats.errors + 1
       report("err", fullname, errobj.msg, errobj.tb)
     end
   end
 end
-
 
 
 local function key_iter(t, k)
@@ -433,11 +534,22 @@ do
     -- Import lunit, fail, assert* and is_* function to the module/testcase
     m.lunit = lunit
     m.fail = lunit.fail
+    m.skip = lunit.skip
     for funcname, func in pairs(lunit) do
       if "assert" == string_sub(funcname, 1, 6) or "is_" == string_sub(funcname, 1, 3) then
         m[funcname] = func
       end
     end
+  end
+
+  function lunit.module(name,seeall)
+    local m = {}
+    if seeall == "seeall" then
+      setmetatable(m, { __index = _G })
+    end
+    m._NAME = name
+    lunit.testcase(m)
+    return m
   end
 
   -- Iterator (testcasename) over all Testcases
@@ -461,7 +573,7 @@ do
   -- Finds a function in a testcase case insensitive
   local function findfuncname(tcname, name)
     for key, value in pairs(testcase(tcname)) do
-      if is_string(key) and is_function(value) and string.lower(key) == name then
+      if is_string(key) and is_function(value) and string_lower(key) == name then
         return key
       end
     end
@@ -482,8 +594,8 @@ do
     local testnames = {}
     for key, value in pairs(testcase(tcname)) do
       if is_string(key) and is_function(value) then
-        local lfn = string.lower(key)
-        if string.sub(lfn, 1, 4) == "test" or string.sub(lfn, -4) == "test" then
+        local lfn = string_lower(key)
+        if string_sub(lfn, 1, 4) == "test" or string_sub(lfn, -4) == "test" then
           testnames[key] = true
         end
       end
@@ -493,11 +605,13 @@ do
 end
 
 
-
-
 function lunit.runtest(tcname, testname)
   orig_assert( is_string(tcname) )
   orig_assert( is_string(testname) )
+
+  if (not getrunner()) then
+    loadrunner("lunit.console")
+  end
 
   local function callit(context, func)
     if func then
@@ -530,14 +644,19 @@ end
 traceback_hide(runtest)
 
 
-
-function lunit.run()
+function lunit.run(testpatterns)
   clearstats()
+  if (not getrunner()) then
+    loadrunner("lunit.console")
+  end
+
   report("begin")
   for testcasename in lunit.testcases() do
     -- Run tests in the testcases
     for testname in lunit.tests(testcasename) do
-      runtest(testcasename, testname)
+      if selected(testpatterns, testname) then
+        runtest(testcasename, testname)
+      end
     end
   end
   report("done")
@@ -552,55 +671,6 @@ function lunit.loadonly()
   report("done")
   return stats
 end
-
-
-
-
-
-
-
-
-
-local lunitpat2luapat
-do 
-  local conv = {
-    ["^"] = "%^",
-    ["$"] = "%$",
-    ["("] = "%(",
-    [")"] = "%)",
-    ["%"] = "%%",
-    ["."] = "%.",
-    ["["] = "%[",
-    ["]"] = "%]",
-    ["+"] = "%+",
-    ["-"] = "%-",
-    ["?"] = ".",
-    ["*"] = ".*"
-  }
-  function lunitpat2luapat(str)
-    return "^" .. string.gsub(str, "%W", conv) .. "$"
-  end
-end
-
-
-
-local function in_patternmap(map, name)
-  if map[name] == true then
-    return true
-  else
-    for _, pat in ipairs(map) do
-      if string.find(name, pat) then
-        return true
-      end
-    end
-  end
-  return false
-end
-
-
-
-
-
 
 
 
@@ -621,6 +691,7 @@ function main(argv)
     if not is_string(filename) then
       return error("lunit.main: invalid argument")
     end
+    if #filename==0 then return end
     local chunk, err = loadfile(filename)
     if err then
       return error(err)
@@ -631,7 +702,6 @@ function main(argv)
 
   local testpatterns = nil
   local doloadonly = false
-  local runner = nil
 
   local i = 0
   while i < #argv do
@@ -642,12 +712,31 @@ function main(argv)
     elseif arg == "--runner" or arg == "-r" then
       local optname = arg; i = i + 1; arg = argv[i]
       checkarg(optname, arg)
-      runner = arg
+      loadrunner(arg)
     elseif arg == "--test" or arg == "-t" then
       local optname = arg; i = i + 1; arg = argv[i]
       checkarg(optname, arg)
       testpatterns = testpatterns or {}
       testpatterns[#testpatterns+1] = arg
+    elseif arg == "--help" or arg == "-h" then
+        print[[
+lunit 0.8
+Copyright (c) 2004-2010 Michael Roth <mroth@nessie.de>
+Copyright (c) 2011-2015 Doug Currie
+This program comes WITHOUT WARRANTY OF ANY KIND.
+
+Usage: lua test [OPTIONS] [--] scripts
+
+Options:
+
+  -r, --runner RUNNER         Testrunner to use, defaults to 'lunit-console'.
+  -t, --test PATTERN          Which tests to run, may contain * or ? wildcards.
+      --loadonly              Only load the tests.
+  -h, --help                  Print this help screen.
+
+Please report bugs to <mroth@nessie.de>.
+]]
+        return
     elseif arg == "--" then
       while i < #argv do
         i = i + 1; arg = argv[i]
@@ -658,8 +747,6 @@ function main(argv)
     end
   end
 
-  loadrunner(runner or "lunit-console")
-
   if doloadonly then
     return loadonly()
   else
@@ -668,3 +755,5 @@ function main(argv)
 end
 
 clearstats()
+
+return lunit
