@@ -26,15 +26,12 @@
 --#########################################################################--]]
 
 
-lunit = require "lunitx"
-local hostlist = require "hostlist"
+local luaunit = require 'luaunit'
+local hostlist = require 'hostlist'
 
 if _VERSION >= 'Lua 5.2' then
-    _ENV = lunit.module('TestHostlist', 'seeall')
     unpack = table.unpack
     loadstring = load
-else
-    module ("TestHostlist", lunit.testcase, package.seeall) 
 end
 
 TestHostlist = {
@@ -139,12 +136,12 @@ TestHostlist = {
 }
 
 function test_new_nil_args()
-	assert_userdata (hostlist.new())
-	assert_userdata (hostlist.new(nil))
-	assert_equal (0, hostlist.new():count())
+	luaunit.assertIsUserdata (hostlist.new())
+	luaunit.assertIsUserdata (hostlist.new(nil))
+	luaunit.assertEquals (0, hostlist.new():count())
 	local hl = hostlist.new()
 	hl:concat ("")
-	assert_equal (0, #hl)
+	luaunit.assertEquals (0, #hl)
 end
 
 
@@ -152,88 +149,88 @@ function test_hostlist_next()
 	for _,s in pairs(TestHostlist.next) do
 		local h = hostlist.new (s)
 		local count = 0
-		assert_userdata (h)
+		luaunit.assertIsUserdata (h)
 		for host in h:next() do
-			assert_string (host)
+			luaunit.assertIsString (host)
 			count = count + 1
-			assert_equal (h[count], host)
+			luaunit.assertEquals (h[count], host)
 		end
-		assert_equal (#h, count)
+		luaunit.assertEquals (#h, count)
 	end
 end
 
 function test_uniq ()
 	for s,r in pairs (TestHostlist.uniq) do
 		local h = hostlist.new (s)
-		assert_userdata (h)
-		assert_equal (r, tostring (h:uniq()))
+		luaunit.assertIsUserdata (h)
+		luaunit.assertEquals (r, tostring (h:uniq()))
 	end
 end
 
 function test_expand()
 	for s,r in pairs (TestHostlist.expand) do
 		local h = hostlist.new (s)
-		assert_userdata (h)
-		assert_equal (r, table.concat (h:expand(), ","))
+		luaunit.assertIsUserdata (h)
+		luaunit.assertEquals (r, table.concat (h:expand(), ","))
 	end
 end
 
 function test_to_string()
 	for s,r in pairs (TestHostlist.to_string) do
 		local h = hostlist.new (s)
-		assert_userdata (h)
-		assert_equal (r, tostring (h))
+		luaunit.assertIsUserdata (h)
+		luaunit.assertEquals (r, tostring (h))
 	end
 end
 
 function test_count()
 	for s,cnt in pairs (TestHostlist.counts) do
 
-		assert_equal (cnt, hostlist.count(s))
+		luaunit.assertEquals (cnt, hostlist.count(s))
 
 		local h = hostlist.new (s)
-		assert_userdata (h)
-		assert_equal (cnt, #h)
-		assert_equal (cnt, h:count())
+		luaunit.assertIsUserdata (h)
+		luaunit.assertEquals (cnt, #h)
+		luaunit.assertEquals (cnt, h:count())
 	end
 end
 
 function test_index()
 	local hl = hostlist.new ("foo[1-10]")
-	assert_nil (hl[0])
+	luaunit.assertIsNil (hl[0])
 	for _,t in pairs (TestHostlist.indeces) do
 		local h = hostlist.new (t.hl)
-		assert_userdata (h)
-		assert_equal (t.result, h[t.index])
+		luaunit.assertIsUserdata (h)
+		luaunit.assertEquals (t.result, h[t.index])
 	end
 end
 
 function test_map ()
 	for _,t in pairs (TestHostlist.map) do
 		local fn, msg = loadstring ("return function(s) return "..t.fn.." end")
-		assert_function (fn, msg)
+		luaunit.assertIsFunction (fn, msg)
 		local result = hostlist.map (t.hl, fn())
-		assert_userdata (result)
-		assert_equal (t.result, tostring (result))
+		luaunit.assertIsUserdata (result)
+		luaunit.assertEquals (t.result, tostring (result))
 	end
 end
 
 function test_delete()
 	for _,t in pairs (TestHostlist.delete) do
 		local hl = hostlist.new (t.hl)
-		assert_userdata (hl)
+		luaunit.assertIsUserdata (hl)
 		hl:delete (unpack(t.args))
-		assert_equal (t.result, tostring (hl))
+		luaunit.assertEquals (t.result, tostring (hl))
 
 		local s = hostlist.delete (t.hl, unpack (t.args))
-		assert_equal (t.result, tostring (s))
+		luaunit.assertEquals (t.result, tostring (s))
 	end
 end
 
 function test_delete_n()
 	for _,t in pairs (TestHostlist.delete_n) do
 		local hl = hostlist.new (t.hl)
-		assert_equal (t.result, tostring (hl:delete_n(t.delete, t.n)))
+		luaunit.assertEquals (t.result, tostring (hl:delete_n(t.delete, t.n)))
 	end
 end
 
@@ -241,49 +238,52 @@ function test_pop()
 	for _,t in pairs (TestHostlist.pop) do
 		local hl = hostlist.new (t.hl)
 		hl:pop(t.pop)
-		assert_equal (t.result, tostring (hl))
+		luaunit.assertEquals (t.result, tostring (hl))
 	end
 end
 
 function test_xor()
 	for _,t in pairs (TestHostlist.xor) do
 		local h = hostlist.xor (t.hl, t.arg)
-		assert_userdata (h)
-		assert_equal (t.result, tostring (h))
+		luaunit.assertIsUserdata (h)
+		luaunit.assertEquals (t.result, tostring (h))
 	end
 end
 
 function test_intersect()
 	for _,t in pairs (TestHostlist.intersect) do
 		local h = hostlist.intersect (t.hl, t.arg)
-		assert_userdata (h)
-		assert_equal (t.result, tostring (h))
+		luaunit.assertIsUserdata (h)
+		luaunit.assertEquals (t.result, tostring (h))
 	end
 end
 
 function test_union()
 	for _,t in pairs (TestHostlist.union) do
 		local h = hostlist.union (unpack(t.hl))
-		assert_userdata (h)
-		assert_equal (t.result, tostring (h))
+		luaunit.assertIsUserdata (h)
+		luaunit.assertEquals (t.result, tostring (h))
 	end
 end
 
 function test_subtract()
 	for _,t in pairs (TestHostlist.subtract) do
 		local h = hostlist.new (t.hl)
-		assert_userdata (h)
+		luaunit.assertIsUserdata (h)
 		local r = h - t.del
-		assert_userdata (r)
-		assert_equal (t.result, tostring (r))
+		luaunit.assertIsUserdata (r)
+		luaunit.assertEquals (t.result, tostring (r))
 	end
 end
 
 function test_find()
 	for _,t in pairs (TestHostlist.find) do
-		assert_equal (t.result, hostlist.find (t.hl, t.host))
+		luaunit.assertEquals (t.result, hostlist.find (t.hl, t.host))
 		local h = hostlist.new (t.hl)
-		assert_userdata (h)
-		assert_equal (t.result, h:find(t.host))
+		luaunit.assertIsUserdata (h)
+		luaunit.assertEquals (t.result, h:find(t.host))
 	end
 end
+
+
+os.exit (luaunit.LuaUnit.run())
