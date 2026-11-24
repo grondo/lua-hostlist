@@ -1396,17 +1396,17 @@ struct _range {
 static int _parse_single_range(const char *str, struct _range *range)
 {
     char *p, *q;
-    char *orig = strdup(str);
-    if (!orig)
+    char *copy = strdup(str);
+    if (!copy)
         seterrno_ret(ENOMEM, 0);
 
-    if ((p = strchr(str, '-'))) {
+    if ((p = strchr(copy, '-'))) {
         *p++ = '\0';
         if (*p == '-')     /* do NOT allow negative numbers */
             goto error;
     }
-    range->lo = strtoul(str, &q, 10);
-    if (q == str)
+    range->lo = strtoul(copy, &q, 10);
+    if (q == copy)
         goto error;
 
     range->hi = (p && *p) ? strtoul(p, &q, 10) : range->lo;
@@ -1418,18 +1418,18 @@ static int _parse_single_range(const char *str, struct _range *range)
         goto error;
 
     if (range->hi - range->lo + 1 > MAX_RANGE ) {
-        _error(__FILE__, __LINE__, "Too many hosts in range `%s'", orig);
-        free(orig);
+        _error(__FILE__, __LINE__, "Too many hosts in range `%s'", str);
+        free(copy);
         seterrno_ret(ERANGE, 0);
     }
 
-    free(orig);
-    range->width = strlen(str);
+    range->width = strlen(copy);
+    free(copy);
     return 1;
 
   error:
-    _error(__FILE__, __LINE__, "Invalid range: `%s'", orig);
-    free(orig);
+    _error(__FILE__, __LINE__, "Invalid range: `%s'", str);
+    free(copy);
     seterrno_ret(EINVAL, 0);
 }
 
