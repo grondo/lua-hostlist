@@ -1,9 +1,11 @@
 lua-hostlist -- lua bindings for manipulating lists of hosts
 ============================================================
 
-lua-hostlist is a small set of lua bindings for the ~hostlist~ code
-used in other LLNL projects such as [pdsh](http://pdsh.googlecode.com)
-and [SLURM](http://www.llnl.gov/linux/slurm). It gives object
+lua-hostlist is a small set of lua bindings for the `libhostlist`
+code from [flux-core](https://github.com/flux-framework/flux-core),
+a descendant of the hostlist code used in other LLNL projects such as
+[pdsh](https://github.com/chaos/pdsh) and
+[Slurm](https://github.com/SchedMD/slurm). It gives object
 based access to manipulating hostlists directly from lua.
 
 A proof-of-concept command line utility `hostlist` is provided as
@@ -11,6 +13,24 @@ a demonstration of the lua-hostlist bindings as well as a utility
 for manipulating hostlist strings from the shell.
 
 lua-hostlist is compatible with Lua 5.1 through 5.5.
+
+The `libhostlist` sources
+-------------------------
+
+The hostlist implementation in `src/common/libhostlist` (along with
+its dependency `src/common/libutil/errno_safe.h`) is copied unmodified
+from flux-core, using the same directory layout, so that updates can
+be applied directly from flux-core. Local changes to these files
+should be avoided; fixes should go to flux-core first.
+
+To update from a flux-core checkout in `../flux-core`:
+
+```sh
+for f in hostlist hostname hostrange util; do
+    cp ../flux-core/src/common/libhostlist/$f.[ch] src/common/libhostlist/
+done
+cp ../flux-core/src/common/libutil/errno_safe.h src/common/libutil/
+```
 
 Installation
 ------------
@@ -256,7 +276,8 @@ License
 -------
 
 lua-hostlist is licensed under the GNU Lesser General Public License
-version 3 (LGPL-3.0). See `LICENSE` and `NOTICE.LLNS` for details.
+version 3 (LGPL-3.0), the same license as flux-core. See `LICENSE`
+and `NOTICE.LLNS` for details.
 
 SPDX-License-Identifier: LGPL-3.0
 
