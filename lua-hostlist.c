@@ -199,7 +199,7 @@ static int l_hostlist_count (lua_State *L)
 {
     hostlist_t hl = lua_string_to_hostlist (L, 1);
     lua_pop (L, 1);
-    lua_pushnumber (L, hostlist_count (hl));
+    lua_pushinteger (L, hostlist_count (hl));
     return (1);
 }
 
@@ -314,7 +314,7 @@ static int l_hostlist_find (lua_State *L)
     if (found < 0)
         lua_pushnil (L);
     else
-        lua_pushnumber (L, found+1);
+        lua_pushinteger (L, found+1);
 
     return (1);
 }
