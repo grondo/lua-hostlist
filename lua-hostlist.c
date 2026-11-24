@@ -174,13 +174,27 @@ static int lua_hostlist_remove_list (lua_State *L, int hl, int del, int limit)
 
 static int l_hostlist_new (lua_State *L)
 {
-    push_hostlist (L, lua_tostring (L, 1));
+    int i;
+    int argc = lua_gettop (L);
+    struct hostlist *hl;
+
     /*
-     *  If a  string was at postion 1,
-     *   replace it with the new hostlist
+     *  Create a hostlist from the first argument, or an empty
+     *   hostlist if there are no arguments or the first is nil.
      */
-    if (lua_gettop (L) > 1)
-        lua_replace (L, 1);
+    hl = lua_hostlist_create (L, lua_tostring (L, 1));
+
+    /*
+     *  Append any remaining arguments
+     */
+    for (i = 2; i <= argc; i++) {
+        if (lua_isuserdata (L, i)) {
+            if (hostlist_append_list (hl, lua_tohostlist (L, i)) < 0)
+                return luaL_error (L, "Unable to append hostlist");
+        }
+        else if (hostlist_append (hl, luaL_checkstring (L, i)) < 0)
+            return luaL_error (L, "Unable to create hostlist");
+    }
     return (1);
 }
 
@@ -201,16 +215,11 @@ static int l_hostlist_nth (lua_State *L)
     const char *host;
     int i = lua_tonumber (L, 2);
 
-    lua_pop (L, 1);
     /*
-     *  If a string is at the top of stack instead of a hostlist,
+     *  If a string is at index 1 instead of a hostlist,
      *  try to create a hostlist out of it.
      */
-    if (lua_isstring (L, 1))
-        l_hostlist_new (L);
-
-    hl = lua_tohostlist (L, 1);
-    lua_pop (L, 1);
+    hl = lua_string_to_hostlist (L, 1);
 
     /*
      *  If index == 0 or is outside of the range of this hostlist,

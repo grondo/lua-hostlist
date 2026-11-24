@@ -357,4 +357,18 @@ function test_pop_returns()
 	luaunit.assertError (h.pop, h, 1, 2)
 end
 
+function test_new_multiple_args()
+	local h = hostlist.new ("foo[1-2]", "bar", hostlist.new ("baz[1-2]"))
+	luaunit.assertIsUserdata (h)
+	luaunit.assertEquals ("foo[1-2],bar,baz[1-2]", tostring (h))
+	luaunit.assertEquals (5, #h)
+	luaunit.assertError (hostlist.new, "foo1", "bar[")
+end
+
+function test_nth_string()
+	luaunit.assertEquals ("foo2", hostlist.nth ("foo[1-3]", 2))
+	luaunit.assertEquals ("foo3", hostlist.nth ("foo[1-3]", -1))
+	luaunit.assertIsNil (hostlist.nth ("foo[1-3]", 4))
+end
+
 os.exit (luaunit.LuaUnit.run())
