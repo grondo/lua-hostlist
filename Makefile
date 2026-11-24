@@ -25,7 +25,15 @@ endif
 LUA_CFLAGS := $(shell pkg-config --cflags $(LUA_PKG_NAME))
 LUA_LIBS :=   $(shell pkg-config --libs $(LUA_PKG_NAME))
 
-override CFLAGS+=  -Wall -ggdb $(LUA_CFLAGS)
+LIBHOSTLIST_SRCS := \
+	src/common/libhostlist/hostlist.c \
+	src/common/libhostlist/hostname.c \
+	src/common/libhostlist/hostrange.c \
+	src/common/libhostlist/util.c
+
+LIBHOSTLIST_OBJS := $(LIBHOSTLIST_SRCS:.c=.o)
+
+override CFLAGS+=  -Wall -ggdb -I. $(LUA_CFLAGS)
 override LDFLAGS+= $(LUA_LIBS)
 
 .SUFFIXES: .c .o .so
@@ -33,7 +41,7 @@ override LDFLAGS+= $(LUA_LIBS)
 .c.o:
 	$(CC) $(CFLAGS) -o $@ -fPIC -c $<
 
-hostlist.so: hostlist.o lua-hostlist.o
+hostlist.so: lua-hostlist.o $(LIBHOSTLIST_OBJS)
 	$(CC) -shared -o $*.so $^ $(LDFLAGS)
 
 check-coverage:
@@ -41,7 +49,7 @@ check-coverage:
 	make CFLAGS="-fprofile-arcs -ftest-coverage" LDFLAGS="-lgcov"
 	make check
 	gcov lua-hostlist.c
-	gcov hostlist.c
+	gcov -o src/common/libhostlist $(LIBHOSTLIST_SRCS)
 
 check: hostlist.so
 	@LUAUNIT_OUTPUT=tap LUA_PATH="$(LUA_PATH);tests/?.lua" $(LUA) tests/tests.lua
@@ -52,3 +60,6 @@ install:
 
 clean:
 	rm -f *.so *.o *.gcov *.gcda *.gcno *.core
+	rm -f src/common/libhostlist/*.o \
+	      src/common/libhostlist/*.gcda \
+	      src/common/libhostlist/*.gcno

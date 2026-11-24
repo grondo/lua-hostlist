@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/*  lua-hostlist.c - Lua bindings for LLNL hostlist code
+/*  lua-hostlist.c - Lua bindings for flux-core libhostlist
  */
 
 #include <stdlib.h>
@@ -19,7 +19,7 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
-#include "hostlist.h"
+#include "src/common/libhostlist/hostlist.h"
 
 /*############################################################################
  *
@@ -31,18 +31,18 @@
  *  Return the hostlist object at index in the Lua stack, or error
  *   and abort.
  */
-static hostlist_t lua_tohostlist (lua_State *L, int index)
+static struct hostlist *lua_tohostlist (lua_State *L, int index)
 {
-    hostlist_t *hptr = luaL_checkudata (L, index, "Hostlist");
+    struct hostlist **hptr = luaL_checkudata (L, index, "Hostlist");
     return (*hptr);
 }
 
 /*
  *  Push hostlist hl as userdata onto the Lua stack with its metatable set.
  */
-static int push_hostlist_userdata (lua_State *L, hostlist_t hl)
+static int push_hostlist_userdata (lua_State *L, struct hostlist *hl)
 {
-    hostlist_t *hlp = lua_newuserdata (L, sizeof (*hlp));
+    struct hostlist **hlp = lua_newuserdata (L, sizeof (*hlp));
 
     *hlp = hl;
     luaL_getmetatable (L, "Hostlist");
@@ -56,7 +56,7 @@ static int push_hostlist_userdata (lua_State *L, hostlist_t hl)
  */
 static int push_hostlist (lua_State *L, const char *s)
 {
-    hostlist_t hl = hostlist_create (s);
+    struct hostlist *hl = s ? hostlist_decode (s) : hostlist_create ();
     if (hl == NULL)
         return luaL_error (L, "Unable to create hostlist");
 
@@ -64,10 +64,10 @@ static int push_hostlist (lua_State *L, const char *s)
 }
 
 /*
- *  Just like `push_hostlist' above, but return the new hostlist_t
+ *  Just like `push_hostlist' above, but return the new hostlist
  *   to the caller.
  */
-static hostlist_t lua_hostlist_create (lua_State *L, const char *s)
+static struct hostlist *lua_hostlist_create (lua_State *L, const char *s)
 {
     push_hostlist (L, s);
     return (lua_tohostlist (L, -1));
@@ -81,10 +81,10 @@ static hostlist_t lua_hostlist_create (lua_State *L, const char *s)
  *  Note that the caller does not need to free the returned hostlist.
  *   The Lua garbage collector will handle this.
  */
-static hostlist_t lua_string_to_hostlist (lua_State *L, int index)
+static struct hostlist *lua_string_to_hostlist (lua_State *L, int index)
 {
     const char *s;
-    hostlist_t hl;
+    struct hostlist *hl;
 
     if (lua_isuserdata (L, index))
         return lua_tohostlist (L, index);
@@ -103,25 +103,65 @@ static hostlist_t lua_string_to_hostlist (lua_State *L, int index)
 }
 
 /*
- *  Wrapper for hostlist_delete() to remove up to [limit] occurrences
- *   (limit <= 0 implies unlimited) of hosts in hostlist [del] from
- *   hostlist [hl].
+ *  Push a copy of hostlist at index onto the top of the Lua stack and
+ *   return it. The copy is owned by the Lua garbage collector.
+ *
+ *  hostlist iteration uses a cursor internal to the hostlist object,
+ *   so a private copy should be used for any traversal during which
+ *   the original hostlist may be accessed or modified (e.g. when
+ *   calling back into Lua, or when the hostlist is also the target
+ *   of the operation).
  */
-static int hostlist_remove_list (hostlist_t hl, hostlist_t del, int limit)
+static struct hostlist *lua_hostlist_copy (lua_State *L, int index)
 {
-    hostlist_iterator_t i = hostlist_iterator_create (del);
-    char *host;
+    struct hostlist *hl = hostlist_copy (lua_tohostlist (L, index));
+    if (hl == NULL)
+        luaL_error (L, "Unable to copy hostlist");
+    push_hostlist_userdata (L, hl);
+    return (hl);
+}
 
-    while ((host = hostlist_next (i))) {
+/*
+ *  Remove up to [limit] occurrences (limit <= 0 implies unlimited)
+ *   of each host in hostlist [del] from hostlist [hl].
+ *
+ *  hl and del must not be the same hostlist.
+ */
+static int hostlist_remove_list (struct hostlist *hl,
+                                 struct hostlist *del,
+                                 int limit)
+{
+    const char *host;
+
+    for (host = hostlist_first (del); host; host = hostlist_next (del)) {
         /*
          *  Delete up to limit occurences of host in list (0 == unlimited)
          */
         int n = limit;
         /* If n == 0 then (--n) should never evaluate true */
-        while (hostlist_delete_host (hl, host) && --n) {;}
-        free (host);
+        while (hostlist_find (hl, host) >= 0
+               && hostlist_remove_current (hl) > 0
+               && --n) {;}
     }
-    hostlist_iterator_destroy (i);
+    return (0);
+}
+
+/*
+ *  Remove hosts in hostlist at index [del] from hostlist at index [hl],
+ *   making a copy of [del] if it refers to the same hostlist as [hl].
+ */
+static int lua_hostlist_remove_list (lua_State *L, int hl, int del, int limit)
+{
+    struct hostlist *h = lua_tohostlist (L, hl);
+    struct hostlist *d = lua_tohostlist (L, del);
+
+    if (h == d) {
+        d = lua_hostlist_copy (L, del);
+        hostlist_remove_list (h, d, limit);
+        lua_pop (L, 1);
+    }
+    else
+        hostlist_remove_list (h, d, limit);
     return (0);
 }
 
@@ -149,7 +189,7 @@ static int l_hostlist_new (lua_State *L)
  */
 static int l_hostlist_destroy (lua_State *L)
 {
-    hostlist_t hl = lua_tohostlist (L, 1);
+    struct hostlist *hl = lua_tohostlist (L, 1);
     lua_pop (L, 1);
     hostlist_destroy (hl);
     return (0);
@@ -157,11 +197,10 @@ static int l_hostlist_destroy (lua_State *L)
 
 static int l_hostlist_nth (lua_State *L)
 {
-    hostlist_t hl;
-    char *host;
+    struct hostlist *hl;
+    const char *host;
     int i = lua_tonumber (L, 2);
 
-    i = lua_tonumber (L, 2);
     lua_pop (L, 1);
     /*
      *  If a string is at the top of stack instead of a hostlist,
@@ -191,13 +230,12 @@ static int l_hostlist_nth (lua_State *L)
     host = hostlist_nth (hl, i-1);
 
     lua_pushstring (L, host);
-    free (host);
     return (1);
 }
 
 static int l_hostlist_count (lua_State *L)
 {
-    hostlist_t hl = lua_string_to_hostlist (L, 1);
+    struct hostlist *hl = lua_string_to_hostlist (L, 1);
     lua_pop (L, 1);
     lua_pushinteger (L, hostlist_count (hl));
     return (1);
@@ -205,7 +243,7 @@ static int l_hostlist_count (lua_State *L)
 
 static int l_hostlist_pop (lua_State *L)
 {
-    hostlist_t hl = lua_tohostlist (L, 1);
+    struct hostlist *hl = lua_tohostlist (L, 1);
     int shift = 0;
     int n = 1;
     int i, t;
@@ -230,16 +268,16 @@ static int l_hostlist_pop (lua_State *L)
     }
 
     for (i = 0; i < n; i++) {
-        char *host;
+        const char *host;
         if (shift)
-            host = hostlist_shift (hl);
+            host = hostlist_first (hl);
         else
-            host = hostlist_pop (hl);
+            host = hostlist_last (hl);
         if (host == NULL)
             break;
         lua_pushstring (L, host);
         lua_rawseti (L, t, i+1);
-        free (host);
+        hostlist_remove_current (hl);
     }
     return (1);
 }
@@ -248,10 +286,9 @@ static int l_hostlist_pop (lua_State *L)
 static int l_hostlist_remove_n (lua_State *L)
 {
     int limit = 0;
-    hostlist_t hl, del;
 
-    hl = lua_string_to_hostlist (L, 1);
-    del = lua_string_to_hostlist (L, 2);
+    lua_string_to_hostlist (L, 1);
+    lua_string_to_hostlist (L, 2);
 
     /*
      *  Check for a numeric 3rd argument, which is the
@@ -261,7 +298,7 @@ static int l_hostlist_remove_n (lua_State *L)
     if (lua_gettop (L) == 3)
         limit = luaL_checknumber (L, 3);
 
-    hostlist_remove_list (hl, del, limit);
+    lua_hostlist_remove_list (L, 1, 2, limit);
 
     /*
      *  Return a reference to the original hostlist
@@ -276,13 +313,14 @@ static int l_hostlist_remove_n (lua_State *L)
  */
 static int l_hostlist_remove (lua_State *L)
 {
-    hostlist_t hl = lua_string_to_hostlist (L, 1);
     int argc = lua_gettop (L);
     int i;
 
+    lua_string_to_hostlist (L, 1);
+
     for (i = 2; i < argc+1; i++) {
-        hostlist_t del = lua_string_to_hostlist (L, i);
-        hostlist_remove_list (hl, del, 0);
+        lua_string_to_hostlist (L, i);
+        lua_hostlist_remove_list (L, 1, i, 0);
     }
 
     /*  Remove all args but the hostlist
@@ -293,7 +331,7 @@ static int l_hostlist_remove (lua_State *L)
 
 static int l_hostlist_find (lua_State *L)
 {
-    hostlist_t hl;
+    struct hostlist *hl;
     const char *host;
     int found;
 
@@ -321,15 +359,26 @@ static int l_hostlist_find (lua_State *L)
 
 static int l_hostlist_concat (lua_State *L)
 {
-    hostlist_t hl = lua_string_to_hostlist (L, 1);
+    struct hostlist *hl = lua_string_to_hostlist (L, 1);
     int i;
     int argc = lua_gettop (L);
 
     for (i = 2; i < argc+1; i++) {
-        if (lua_isuserdata (L, i))
-            hostlist_push_list (hl, lua_tohostlist (L, i));
+        if (lua_isuserdata (L, i)) {
+            struct hostlist *hl2 = lua_tohostlist (L, i);
+            /*
+             *  Appending a hostlist to itself would never terminate,
+             *   so append a copy instead.
+             */
+            if (hl2 == hl) {
+                hostlist_append_list (hl, lua_hostlist_copy (L, i));
+                lua_pop (L, 1);
+            }
+            else
+                hostlist_append_list (hl, hl2);
+        }
         else
-            hostlist_push (hl, luaL_checkstring (L, i));
+            hostlist_append (hl, luaL_checkstring (L, i));
     }
 
     /*
@@ -343,18 +392,18 @@ static int l_hostlist_concat (lua_State *L)
  *  Core function for Intersect and XOR
  */
 static void
-hostlist_push_set_result (hostlist_t r, hostlist_t h1,  hostlist_t h2, int xor)
+hostlist_push_set_result (struct hostlist *r,
+                          struct hostlist *h1,
+                          struct hostlist *h2,
+                          int xor)
 {
-    char *host;
-    hostlist_iterator_t i = hostlist_iterator_create (h1);
+    const char *host;
 
-    while ((host = hostlist_next (i))) {
+    for (host = hostlist_first (h1); host; host = hostlist_next (h1)) {
         int found = (hostlist_find (h2, host) >= 0);
         if ((xor && !found) || (!xor && found))
-            hostlist_push_host (r, host);
-        free (host);
+            hostlist_append (r, host);
     }
-    hostlist_iterator_destroy (i);
 }
 
 /*
@@ -365,21 +414,21 @@ hostlist_push_set_result (hostlist_t r, hostlist_t h1,  hostlist_t h2, int xor)
 static int l_hostlist_set_op (lua_State *L, int xor)
 {
     int i;
-    hostlist_t r;
+    struct hostlist *r;
     int nargs = lua_gettop (L);
 
     /*
      *  Create hostlist to hold result and push first arg
      */
-    r = hostlist_create (NULL);
-    hostlist_push_list (r, lua_string_to_hostlist (L, 1));
+    r = hostlist_create ();
+    hostlist_append_list (r, lua_string_to_hostlist (L, 1));
 
     /*
      *  Now incrementally build results in r for each arg (2..n)
      */
     for (i = 2; i <= nargs ; i++) {
-        hostlist_t hl = lua_string_to_hostlist (L, i);
-        hostlist_t tmp = hostlist_create (NULL);
+        struct hostlist *hl = lua_string_to_hostlist (L, i);
+        struct hostlist *tmp = hostlist_create ();
 
         hostlist_push_set_result (tmp, r, hl, xor);
 
@@ -421,7 +470,7 @@ static int l_hostlist_xor (lua_State *L)
  */
 static int l_hostlist_del (lua_State *L)
 {
-    hostlist_t r;
+    struct hostlist *r;
     int i;
     int nargs = lua_gettop (L);
 
@@ -430,8 +479,8 @@ static int l_hostlist_del (lua_State *L)
      *
      *   Start with first list and remove all others
      */
-    r = hostlist_create (NULL);
-    hostlist_push_list (r, lua_string_to_hostlist (L, 1));
+    r = hostlist_create ();
+    hostlist_append_list (r, lua_string_to_hostlist (L, 1));
 
     for (i = 2; i <= nargs; i++)
         hostlist_remove_list (r, lua_string_to_hostlist (L, i), 0);
@@ -442,14 +491,14 @@ static int l_hostlist_del (lua_State *L)
 
 static int l_hostlist_union (lua_State *L)
 {
-    hostlist_t r;
+    struct hostlist *r;
     int i;
     int nargs = lua_gettop (L);
 
-    r = hostlist_create (NULL);
+    r = hostlist_create ();
 
     for (i = 1; i <= nargs; i++)
-        hostlist_push_list (r, lua_string_to_hostlist (L, i));
+        hostlist_append_list (r, lua_string_to_hostlist (L, i));
 
     hostlist_uniq (r);
     push_hostlist_userdata (L, r);
@@ -459,12 +508,14 @@ static int l_hostlist_union (lua_State *L)
 
 static int l_hostlist_tostring (lua_State *L)
 {
-    char buf [4096];
-    hostlist_t hl = lua_tohostlist (L, -1);
-    lua_pop (L, 1);
-    hostlist_ranged_string (hl, sizeof (buf), buf);
+    char *s;
+    struct hostlist *hl = lua_tohostlist (L, -1);
 
-    lua_pushstring (L, buf);
+    if (!(s = hostlist_encode (hl)))
+        return luaL_error (L, "Unable to encode hostlist");
+    lua_pop (L, 1);
+    lua_pushstring (L, s);
+    free (s);
     return (1);
 }
 
@@ -501,7 +552,7 @@ static int l_hostlist_strconcat (lua_State *L)
 
 static int l_hostlist_uniq (lua_State *L)
 {
-    hostlist_t hl = lua_tohostlist (L, 1);
+    struct hostlist *hl = lua_tohostlist (L, 1);
     hostlist_uniq (hl);
     /*
      *  Return a reference to the hostlist
@@ -511,7 +562,7 @@ static int l_hostlist_uniq (lua_State *L)
 
 static int l_hostlist_sort (lua_State *L)
 {
-    hostlist_t hl = lua_tohostlist (L, 1);
+    struct hostlist *hl = lua_tohostlist (L, 1);
     hostlist_sort (hl);
     /*
      *  Return a reference to the hostlist
@@ -556,20 +607,24 @@ static int l_hostlist_index (lua_State *L)
  */
 static int l_hostlist_map (lua_State *L)
 {
-    char *host;
-    hostlist_t hl, r;
-    hostlist_iterator_t i;
+    const char *host;
+    struct hostlist *hl, *r;
 
-    hl = lua_string_to_hostlist (L, 1);
+    lua_string_to_hostlist (L, 1);
     if (!lua_isfunction (L, 2))
         return luaL_argerror (L, 2, "expected function argument");
+    lua_settop (L, 2);
+
+    /*  Iterate over a copy of the hostlist, since the function may
+     *   access or modify the original.
+     */
+    hl = lua_hostlist_copy (L, 1);
 
     /*  Create new hostlist at top of stack to hold results:
      */
     r = lua_hostlist_create (L, NULL);
 
-    i = hostlist_iterator_create (hl);
-    while ((host = hostlist_next (i))) {
+    for (host = hostlist_first (hl); host; host = hostlist_next (hl)) {
         /*  Copy function to run to top of stack to be consumed by lua_pcall
          */
         lua_pushvalue (L, 2);
@@ -581,27 +636,21 @@ static int l_hostlist_map (lua_State *L)
         /*
          *  Call function and leave 1 result on the stack
          */
-        if (lua_pcall (L, 1, 1, 0) != 0) {
-                hostlist_iterator_destroy (i);
-                free (host);
+        if (lua_pcall (L, 1, 1, 0) != 0)
                 return luaL_error (L, "map: %s", lua_tostring (L, -1));
-        }
 
         /*
          *  Only push entry on hostlist if there was a return value
          */
         if (!lua_isnil (L, -1))
-            hostlist_push_host (r, lua_tostring (L, -1));
+            hostlist_append (r, lua_tostring (L, -1));
         lua_pop (L, 1);
-        free (host);
     }
-
-    hostlist_iterator_destroy(i);
 
     /*  Clean up stack and return
      */
     lua_replace (L, 1);
-    lua_pop (L, lua_gettop (L) - 1);
+    lua_settop (L, 1);
 
     return (1);
 }
@@ -612,15 +661,20 @@ static int l_hostlist_map (lua_State *L)
  */
 static int l_hostlist_expand (lua_State *L)
 {
-    char *host;
-    hostlist_t hl;
-    hostlist_iterator_t i;
+    const char *host;
+    struct hostlist *hl;
     int has_function;
     int n, t;
 
-    hl = lua_string_to_hostlist (L, 1);
+    lua_string_to_hostlist (L, 1);
 
     has_function = lua_isfunction (L, 2);
+    lua_settop (L, 2);
+
+    /*  Iterate over a copy of the hostlist, since the function may
+     *   access or modify the original.
+     */
+    hl = lua_hostlist_copy (L, 1);
 
     /*  Create new table at top of stack to hold results:
      */
@@ -628,8 +682,7 @@ static int l_hostlist_expand (lua_State *L)
     t = lua_gettop (L);
 
     n = 1;
-    i = hostlist_iterator_create (hl);
-    while ((host = hostlist_next (i))) {
+    for (host = hostlist_first (hl); host; host = hostlist_next (hl)) {
         /*  If we have a function to run, copy onto the top of the stack
          *   to be consumed by lua_pcall
          */
@@ -643,11 +696,8 @@ static int l_hostlist_expand (lua_State *L)
         /*
          *  Call function if needed and leave 1 result on the stack
          */
-        if (has_function && lua_pcall (L, 1, 1, 0) != 0) {
-                hostlist_iterator_destroy (i);
-                free (host);
+        if (has_function && lua_pcall (L, 1, 1, 0) != 0)
                 return luaL_error (L, "map: %s", lua_tostring (L, -1));
-        }
 
         /*
          *  Only push entry on table if there was a return value
@@ -656,34 +706,42 @@ static int l_hostlist_expand (lua_State *L)
             lua_pop (L, 1);
         else
             lua_rawseti (L, t, n++);
-        free (host);
     }
-
-    hostlist_iterator_destroy(i);
 
     /*  Clean up stack and return
      */
     lua_replace (L, 1);
-    lua_pop (L, lua_gettop (L) - 1);
+    lua_settop (L, 1);
 
     return (1);
 }
 
 
 /*
- *  Return a hostlist_iterator_t *  full userdata as hostlist_iterator_t
+ *  Hostlist iterator state, stored as full userdata.
+ *
+ *  The iterator holds a private copy of the hostlist so that iteration
+ *   is unaffected by any access to (and modification of) the original
+ *   hostlist, and so that the iterator remains valid even if the
+ *   original hostlist is garbage collected.
  */
-static hostlist_iterator_t lua_tohostlist_iterator (lua_State *L, int index)
+struct hostlist_iterator {
+    struct hostlist *hl;
+    int started;
+};
+
+static struct hostlist_iterator *
+lua_tohostlist_iterator (lua_State *L, int index)
 {
-    hostlist_iterator_t *ip = luaL_checkudata (L, index, "HostlistIterator");
-    return (*ip);
+    return luaL_checkudata (L, index, "HostlistIterator");
 }
 
 
 static int l_hostlist_iterator_destroy (lua_State *L)
 {
-    hostlist_iterator_t i = lua_tohostlist_iterator (L, 1);
-    hostlist_iterator_destroy (i);
+    struct hostlist_iterator *i = lua_tohostlist_iterator (L, 1);
+    hostlist_destroy (i->hl);
+    i->hl = NULL;
     return (0);
 }
 
@@ -692,21 +750,26 @@ static int l_hostlist_iterator_destroy (lua_State *L)
  */
 static int l_hostlist_iterator (lua_State *L)
 {
-    char *host;
+    const char *host;
     /*
      *  Get hostlist iterator instance, which is the sole upvalue
      *   for this closure
      */
     int index = lua_upvalueindex (1);
-    hostlist_iterator_t i = lua_tohostlist_iterator (L, index);
+    struct hostlist_iterator *i = lua_tohostlist_iterator (L, index);
 
-    if (i == NULL)
+    if (i->hl == NULL)
         return luaL_error (L, "Invalid hostlist iterator");
 
-    host = hostlist_next (i);
+    if (!i->started) {
+        i->started = 1;
+        host = hostlist_first (i->hl);
+    }
+    else
+        host = hostlist_next (i->hl);
+
     if (host != NULL) {
         lua_pushstring (L, host);
-        free (host);
         return (1);
     }
     return (0);
@@ -717,19 +780,20 @@ static int l_hostlist_iterator (lua_State *L)
  */
 static int l_hostlist_next (lua_State *L)
 {
-    hostlist_t hl = lua_tohostlist (L, 1);
-    hostlist_iterator_t *ip;
-
-    lua_pop (L, 1);
+    struct hostlist *hl = lua_tohostlist (L, 1);
+    struct hostlist_iterator *i;
 
     /*
      *  Push hostlist iterator onto stack top with metatable set
      */
-    ip = lua_newuserdata (L, sizeof (*ip));
-    *ip = hostlist_iterator_create (hl);
+    i = lua_newuserdata (L, sizeof (*i));
+    i->hl = NULL;
+    i->started = 0;
     luaL_getmetatable (L, "HostlistIterator");
     lua_setmetatable (L, -2);
 
+    if (!(i->hl = hostlist_copy (hl)))
+        return luaL_error (L, "Unable to create hostlist iterator");
 
     /*
      *  Used in for loop, iterator creation function should return:
