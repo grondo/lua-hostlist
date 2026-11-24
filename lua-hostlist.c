@@ -135,7 +135,7 @@ static int hostlist_remove_list (struct hostlist *hl,
 
     for (host = hostlist_first (del); host; host = hostlist_next (del)) {
         /*
-         *  Delete up to limit occurences of host in list (0 == unlimited)
+         *  Delete up to limit occurrences of host in list (0 == unlimited)
          */
         int n = limit;
         /* If n == 0 then (--n) should never evaluate true */
@@ -474,7 +474,7 @@ static int l_hostlist_xor (lua_State *L)
 
 
 /*
- *  hostlist_del: delete all occurence of hosts from first argument
+ *  hostlist_del: delete all occurrences of hosts from first argument
  *   Returns a new hostlist object and doesn't modify the first arg
  */
 static int l_hostlist_del (lua_State *L)
@@ -807,7 +807,7 @@ static int l_hostlist_next (lua_State *L)
     /*
      *  Used in for loop, iterator creation function should return:
      *   iterator, state, starting val (nil)
-     *    state is nil becuase we are using a closure.
+     *    state is nil because we are using a closure.
      */
     lua_pushcclosure (L, l_hostlist_iterator, 1);
 

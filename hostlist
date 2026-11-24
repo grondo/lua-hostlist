@@ -303,7 +303,7 @@ end
 function check_opts (opts)
 	
 	--
-	--  Check that no more than one exlusive option was passed:
+	--  Check that no more than one exclusive option was passed:
 	--
 	local n = 0
 	for _,opt in pairs(exclusive_options) do
