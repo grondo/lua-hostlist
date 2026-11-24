@@ -212,7 +212,8 @@ static int l_hostlist_pop (lua_State *L)
 
     if (lua_gettop (L) > 2)
         return luaL_error (L,
-                "Expected 2 arguments to hostlist.pop (got %d)\n");
+                "Expected 2 arguments to hostlist.pop (got %d)",
+                lua_gettop (L));
 
     if (lua_isnumber (L, 2))
         n = lua_tonumber (L, 2);
