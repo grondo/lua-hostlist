@@ -1,24 +1,12 @@
-##*****************************************************************************
-## Copyright (C) 2007-2013 Lawrence Livermore National Security, LLC.
-## Produced at Lawrence Livermore National Laboratory.
-##
-## LLNL-CODE-645467. All Rights Reserved.
-##
-## This file is part of lua-hostlist.
-##
-## This is free software: you can redistribute it and/or modify it
-## under the terms of the GNU General Public License (as published by the
-## Free Software Foundation) version 2, dated June 1991.
-##
-## This program is distributed in the hope that it will be useful, but
-## WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-## or FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the
-## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## and GNU Lesser General Public License along with MUNGE.  If not, see
-## <http://www.gnu.org/licenses/>.
-##*****************************************************************************
+#############################################################
+# Copyright 2007 Lawrence Livermore National Security, LLC
+# (c.f. NOTICE.LLNS, LICENSE)
+#
+# This file is part of lua-hostlist.
+# For details, see https://github.com/grondo/lua-hostlist.
+#
+# SPDX-License-Identifier: LGPL-3.0
+#############################################################
 
 LUA        ?= lua
 LUA_VER    ?= $(shell $(LUA) -e 'print (_VERSION:match("Lua (.+)") )')

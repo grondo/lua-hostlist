@@ -251,3 +251,13 @@ foo[10,20,30,40,50,60,70,80,90,100]
 $ hostlist --filter='"hosts"..s' [1-100]
 hosts[1-100]
 ```
+
+License
+-------
+
+lua-hostlist is licensed under the GNU Lesser General Public License
+version 3 (LGPL-3.0). See `LICENSE` and `NOTICE.LLNS` for details.
+
+SPDX-License-Identifier: LGPL-3.0
+
+LLNL-CODE-645467

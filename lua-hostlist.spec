@@ -4,7 +4,7 @@ Release:	1%{?dist}
 Summary:	Lua hostlist library
 
 Group:		Development/Libraries
-License:	GPL
+License:	LGPL-3.0-only
 URL:		http://code.google.com/p/lua-hostlist
 Source0:	
 BuildRoot:	%(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
@@ -42,6 +42,7 @@ rm -rf $RPM_BUILD_ROOT
 
 %files
 %defattr(-,root,root,-)
+%license LICENSE NOTICE.LLNS
 %doc NEWS
 %{_bindir}/hostlist
 %{_libdir}/*/*
