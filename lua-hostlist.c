@@ -336,7 +336,6 @@ static int l_hostlist_concat (lua_State *L)
      *  Clean up stack and return original hostlist
      */
     lua_settop (L, 1);
-    lua_gc (L, LUA_GCCOLLECT, 0);
     return (1);
 }
 
@@ -398,12 +397,6 @@ static int l_hostlist_set_op (lua_State *L, int xor)
     }
 
     /*
-     *  Pop everything and collect garbage
-     */
-    lua_pop (L, 0);
-    lua_gc (L, LUA_GCCOLLECT, 0);
-
-    /*
      *  Always sort and uniq return hostlist
      */
     hostlist_uniq (r);
@@ -443,12 +436,6 @@ static int l_hostlist_del (lua_State *L)
     for (i = 2; i <= nargs; i++)
         hostlist_remove_list (r, lua_string_to_hostlist (L, i), 0);
 
-    /*
-     *  Pop everything and return r
-     */
-    lua_pop (L, 0);
-    lua_gc (L, LUA_GCCOLLECT, 0);
-
     push_hostlist_userdata (L, r);
     return (1);
 }
@@ -463,9 +450,6 @@ static int l_hostlist_union (lua_State *L)
 
     for (i = 1; i <= nargs; i++)
         hostlist_push_list (r, lua_string_to_hostlist (L, i));
-
-    lua_pop (L, 0);
-    lua_gc (L, LUA_GCCOLLECT, 0);
 
     hostlist_uniq (r);
     push_hostlist_userdata (L, r);
