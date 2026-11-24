@@ -10,7 +10,7 @@ A proof-of-concept command line utility `hostlist` is provided as
 a demonstration of the lua-hostlist bindings as well as a utility
 for manipulating hostlist strings from the shell.
 
-At this time, lua-hostlist is compatible with lua 5.1.
+lua-hostlist is compatible with Lua 5.1 through 5.5.
 
 Installation
 ------------
