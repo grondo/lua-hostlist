@@ -64,6 +64,31 @@ function test_remove_long_option()
 	end
 end
 
+function test_deprecated_options_warn()
+	local out, err, ok = hostlist ("-R", "1", "foo[1,1,2]", "foo1")
+	luaunit.assertTrue (ok)
+	luaunit.assertEquals (out, "foo[1-2]\n")
+	luaunit.assertStrContains (err, "-R, --remove is deprecated")
+
+	out, err, ok = hostlist ("--filter=s:upper()", "foo[1-3]")
+	luaunit.assertTrue (ok)
+	luaunit.assertEquals (out, "FOO[1-3]\n")
+	luaunit.assertStrContains (err, "-f, --filter is deprecated")
+end
+
+function test_no_warning_by_default()
+	for _, args in ipairs {
+		{ "foo[1-3]" },
+		{ "-e", "foo[1-3]" },
+		{ "-c", "foo[1-3]" },
+		{ "-m", "foo[1-3]", "foo2" },
+	} do
+		local _, err, ok = hostlist (unpack (args))
+		luaunit.assertTrue (ok)
+		luaunit.assertEquals (err, "")
+	end
+end
+
 local rc = luaunit.LuaUnit.run ()
 os.remove (tmpfile)
 os.exit (rc)

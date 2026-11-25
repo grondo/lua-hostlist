@@ -40,13 +40,18 @@ Usage: %s [OPTION]... [HOSTLIST]...
   -x, --exclude                Exclude all HOSTLIST args from first HOSTLIST
   -X, --xor                    Symmetric difference of all HOSTLIST args
   -R, --remove=N               Remove only N occurrences of args from HOSTLIST
+                                (deprecated)
   -S, --sort                   Return sorted HOSTLIST
   -f, --filter=CODE            Map Lua CODE over all hosts in result HOSTLIST
+                                (deprecated)
   -F, --find=HOST              Output position of HOST in result HOSTLIST
                                 (exits non-zero if host not found)
 
  An arbitrary number of HOSTLIST arguments are supported for all
   operations.  The default operation is to concatenate all HOSTLIST args.
+
+ The -R, --remove and -f, --filter options are deprecated and will be
+  removed in a future release.
 
 ]]
 	
@@ -254,6 +259,12 @@ function log_err (...)
 	log_msg (unpack(args))
 end
 
+function log_warn (...)
+	local args = {...}
+	args[1] = "Warning: " .. args[1]
+	log_msg (unpack(args))
+end
+
 function log_verbose (...)
 	if (verbose) then log_msg (...) end
 end
@@ -301,7 +312,19 @@ function convert_string_to_escape (s)
 end
 
 function check_opts (opts)
-	
+
+	--
+	--  Warn about deprecated options:
+	--
+	if opts.R ~= nil then
+		log_warn ("-R, --remove is deprecated and will be removed"
+		          .. " in a future release\n")
+	end
+	if opts.f ~= nil then
+		log_warn ("-f, --filter is deprecated and will be removed"
+		          .. " in a future release\n")
+	end
+
 	--
 	--  Check that no more than one exclusive option was passed:
 	--
