@@ -14,6 +14,7 @@ Version 0.8 (2026-11-25):
 - hostlist: fix the --remove option.
 - hostlist: add -L, --limit, --delimiter, --intersect to match flux hostlist.
 - hostlist: deprecate -R, --remove and -f, --filter.
+- hostlist: fix crash on empty input with -x, -m, or -R.
 - Fix build with -Werror on glibc 2.42 and later.
 - Convert tests from lunit to luaunit to fix a `make check` crash.
 
