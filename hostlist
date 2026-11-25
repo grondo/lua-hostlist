@@ -283,7 +283,7 @@ function parse_cmdline (arg)
 		intersection         = "i",
 		exclude              = "x",
 		xor                  = "X",
-		remove               = "D",
+		remove               = "R",
 		filter               = "f",
 		find                 = "F",
 		sort                 = "S",
