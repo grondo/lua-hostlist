@@ -373,19 +373,8 @@ static int l_hostlist_concat (lua_State *L)
     int argc = lua_gettop (L);
 
     for (i = 2; i < argc+1; i++) {
-        if (lua_isuserdata (L, i)) {
-            struct hostlist *hl2 = lua_tohostlist (L, i);
-            /*
-             *  Appending a hostlist to itself would never terminate,
-             *   so append a copy instead.
-             */
-            if (hl2 == hl) {
-                hostlist_append_list (hl, lua_hostlist_copy (L, i));
-                lua_pop (L, 1);
-            }
-            else
-                hostlist_append_list (hl, hl2);
-        }
+        if (lua_isuserdata (L, i))
+            hostlist_append_list (hl, lua_tohostlist (L, i));
         else
             hostlist_append (hl, luaL_checkstring (L, i));
     }
