@@ -40,3 +40,8 @@ jobs:
         make install LUA=lua${{ matrix.lua }} DESTDIR=$(pwd)/inst
         test -x inst/usr/local/lib/lua/${{ matrix.lua }}/hostlist.so
         test -x inst/usr/local/bin/hostlist
+    - name: check installed module is found by require
+      run: |
+        sudo make install LUA=lua${{ matrix.lua }} PREFIX=/usr
+        cd /tmp
+        lua${{ matrix.lua }} /usr/bin/hostlist -c 'foo[1-5]' | grep -qx 5
