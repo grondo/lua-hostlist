@@ -42,16 +42,23 @@ headers (e.g. `liblua5.4-dev` or `lua-devel`). In most cases a simple
  make && make check && make install
 ```
 
-should work. This will result in installation of the Lua module
-`hostlist.so` into `/usr/local/lib/lua/LUA_VER` and the `hostlist`
-utility into `/usr/local/bin`. The location of installation can
-be controlled with `PREFIX` `LIBDIR` and `LUA_VER`, e.g.
+should work. This will install the `hostlist` utility into
+`PREFIX/bin` (default `/usr/local/bin`), and the Lua module
+`hostlist.so` into a directory under `PREFIX` that is in the default
+module search path (`package.cpath`) of the Lua interpreter, e.g.
+`/usr/local/lib/lua/5.4` or, with `PREFIX=/usr`, `/usr/lib64/lua/5.4`
+on Fedora or `/usr/lib/x86_64-linux-gnu/lua/5.4` on Debian. If
+`PREFIX` is not set and the interpreter does not search `/usr/local`,
+the module is installed into the first directory in its search path.
+
+Use `LUA` to select the Lua interpreter, and `LIBDIR` or `LUA_OBJDIR`
+to set the installation directory explicitly, e.g.
 
 ```sh
- PREFIX=/usr LIBDIR=/usr/lib64 LUA_VER=5.1 make install
+ make install LUA=lua5.4 PREFIX=/usr LIBDIR=/usr/lib64
 ```
 
-will install into `/usr/lib64/lua/5.1`.
+will install the module into `/usr/lib64/lua/5.4`.
 
 The `hostlist` Utility
 ----------------------
