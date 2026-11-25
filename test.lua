@@ -1,4 +1,13 @@
 #!/usr/bin/lua
+--------------------------------------------------------------
+-- Copyright 2013 Lawrence Livermore National Security, LLC
+-- (c.f. NOTICE.LLNS, LICENSE)
+--
+-- This file is part of lua-hostlist.
+-- For details, see https://github.com/grondo/lua-hostlist.
+--
+-- SPDX-License-Identifier: LGPL-3.0
+--------------------------------------------------------------
 require "hostlist"
 
 function printf (...)

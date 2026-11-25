@@ -1,24 +1,12 @@
-##*****************************************************************************
-## Copyright (C) 2007-2013 Lawrence Livermore National Security, LLC.
-## Produced at Lawrence Livermore National Laboratory.
-##
-## LLNL-CODE-645467. All Rights Reserved.
-##
-## This file is part of lua-hostlist.
-##
-## This is free software: you can redistribute it and/or modify it
-## under the terms of the GNU General Public License (as published by the
-## Free Software Foundation) version 2, dated June 1991.
-##
-## This program is distributed in the hope that it will be useful, but
-## WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
-## or FITNESS FOR A PARTICULAR PURPOSE.  See the terms and conditions of the
-## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## and GNU Lesser General Public License along with MUNGE.  If not, see
-## <http://www.gnu.org/licenses/>.
-##*****************************************************************************
+#############################################################
+# Copyright 2007 Lawrence Livermore National Security, LLC
+# (c.f. NOTICE.LLNS, LICENSE)
+#
+# This file is part of lua-hostlist.
+# For details, see https://github.com/grondo/lua-hostlist.
+#
+# SPDX-License-Identifier: LGPL-3.0
+#############################################################
 
 LUA        ?= lua
 LUA_VER    ?= $(shell $(LUA) -e 'print (_VERSION:match("Lua (.+)") )')
@@ -37,7 +25,15 @@ endif
 LUA_CFLAGS := $(shell pkg-config --cflags $(LUA_PKG_NAME))
 LUA_LIBS :=   $(shell pkg-config --libs $(LUA_PKG_NAME))
 
-override CFLAGS+=  -Wall -ggdb $(LUA_CFLAGS)
+LIBHOSTLIST_SRCS := \
+	src/common/libhostlist/hostlist.c \
+	src/common/libhostlist/hostname.c \
+	src/common/libhostlist/hostrange.c \
+	src/common/libhostlist/util.c
+
+LIBHOSTLIST_OBJS := $(LIBHOSTLIST_SRCS:.c=.o)
+
+override CFLAGS+=  -Wall -ggdb -I. $(LUA_CFLAGS)
 override LDFLAGS+= $(LUA_LIBS)
 
 .SUFFIXES: .c .o .so
@@ -45,7 +41,7 @@ override LDFLAGS+= $(LUA_LIBS)
 .c.o:
 	$(CC) $(CFLAGS) -o $@ -fPIC -c $<
 
-hostlist.so: hostlist.o lua-hostlist.o
+hostlist.so: lua-hostlist.o $(LIBHOSTLIST_OBJS)
 	$(CC) -shared -o $*.so $^ $(LDFLAGS)
 
 check-coverage:
@@ -53,7 +49,7 @@ check-coverage:
 	make CFLAGS="-fprofile-arcs -ftest-coverage" LDFLAGS="-lgcov"
 	make check
 	gcov lua-hostlist.c
-	gcov hostlist.c
+	gcov -o src/common/libhostlist $(LIBHOSTLIST_SRCS)
 
 check: hostlist.so
 	@LUAUNIT_OUTPUT=tap LUA_PATH="$(LUA_PATH);tests/?.lua" $(LUA) tests/tests.lua
@@ -64,3 +60,6 @@ install:
 
 clean:
 	rm -f *.so *.o *.gcov *.gcda *.gcno *.core
+	rm -f src/common/libhostlist/*.o \
+	      src/common/libhostlist/*.gcda \
+	      src/common/libhostlist/*.gcno

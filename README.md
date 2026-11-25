@@ -1,9 +1,11 @@
 lua-hostlist -- lua bindings for manipulating lists of hosts
 ============================================================
 
-lua-hostlist is a small set of lua bindings for the ~hostlist~ code
-used in other LLNL projects such as [pdsh](http://pdsh.googlecode.com)
-and [SLURM](http://www.llnl.gov/linux/slurm). It gives object
+lua-hostlist is a small set of lua bindings for the `libhostlist`
+code from [flux-core](https://github.com/flux-framework/flux-core),
+a descendant of the hostlist code used in other LLNL projects such as
+[pdsh](https://github.com/chaos/pdsh) and
+[Slurm](https://github.com/SchedMD/slurm). It gives object
 based access to manipulating hostlists directly from lua.
 
 A proof-of-concept command line utility `hostlist` is provided as
@@ -12,17 +14,37 @@ for manipulating hostlist strings from the shell.
 
 lua-hostlist is compatible with Lua 5.1 through 5.5.
 
+The `libhostlist` sources
+-------------------------
+
+The hostlist implementation in `src/common/libhostlist` (along with
+its dependency `src/common/libutil/errno_safe.h`) is copied unmodified
+from flux-core, using the same directory layout, so that updates can
+be applied directly from flux-core. Local changes to these files
+should be avoided; fixes should go to flux-core first.
+
+To update from a flux-core checkout in `../flux-core`:
+
+```sh
+for f in hostlist hostname hostrange util; do
+    cp ../flux-core/src/common/libhostlist/$f.[ch] src/common/libhostlist/
+done
+cp ../flux-core/src/common/libutil/errno_safe.h src/common/libutil/
+```
+
 Installation
 ------------
 
-In most cases a simple
+Building requires a C compiler, `pkg-config`, and the Lua development
+headers (e.g. `liblua5.4-dev` or `lua-devel`). In most cases a simple
 
 ```sh
- make && make install
+ make && make check && make install
 ```
 
 should work. This will result in installation of the Lua module
-`hostlist.so` into /usr/local/lib. The location of installation can
+`hostlist.so` into `/usr/local/lib/lua/LUA_VER` and the `hostlist`
+utility into `/usr/local/bin`. The location of installation can
 be controlled with `PREFIX` `LIBDIR` and `LUA_VER`, e.g.
 
 ```sh
@@ -81,17 +103,30 @@ Supported functions and methods exported from the hostlist library:
  * Create new hostlist
 
 ```lua
-local hl, err = hostlist.new ()            -- Empty hostlist
-local hl, err = hostlist.new (s1)          -- Hostlist from string s1
-local hl, err = hostlist.new (s1, s2, s3)  -- Multiple args supported
+local hl = hostlist.new ()            -- Empty hostlist
+local hl = hostlist.new (s1)          -- Hostlist from string s1
+local hl = hostlist.new (s1, s2, s3)  -- Multiple args supported
 ```
 
+`hostlist.new()` raises an error if a string is not a valid hostlist.
+Use `pcall()` to handle invalid input:
+
+```lua
+local ok, hl = pcall (hostlist.new, s)
+if not ok then
+    print ("invalid hostlist: " .. hl)
+end
+```
+
+There is no fixed limit on the number of hosts in a hostlist.
+
 ```sh
-$ hostlist  foo1 foo2 foo3 
+$ hostlist foo1 foo2 foo3
 foo[1-3]
 $ echo foo1 foo2 foo3 | hostlist
 foo[1-3]
 ```
+
  * Expand a "compressed" hostlist
 
 ```lua
@@ -110,7 +145,7 @@ foo3
 foo4
 ```
 
-* Print a hostlist in lua
+ * Print a hostlist in lua
 
 ```lua
 local hl = hostlist.new ("foo[1-5]")
@@ -119,7 +154,7 @@ print ("hostlist" .. hl)  -- promoted to string by __concat method
 
 --  To print an "expanded" hostlist first expand to a table, then
 --   use table.concat()
-print (table.concat (hl:expand()))
+print (table.concat (hl:expand(), ","))
 ```
 
  * Count hosts in a hostlist
@@ -137,9 +172,12 @@ $ hostlist -c foo[0-3]
  * Return a host at a specific index in a hostlist:
 
 ```lua
-local nth = hostlist.nth (s)      -- Return nth host in hostlist string s
+local nth = hostlist.nth (s, n)   -- Return nth host in hostlist string s
 local nth = hl[n]                 -- Same for hostlist object hl
+local last = hl[-1]               -- Negative indices count from the end
 ```
+
+Indices start at 1. `nil` is returned for an index that is out of range.
 
 ```sh
 $ hostlist --nth=4 foo[0-100]
@@ -154,7 +192,7 @@ local n = hl:find (host)          -- Find host 'host' in hostlist object 'hl'
 ```
 
 ```sh
-$ hostlist --find=foo3 'foo[0-10]' 
+$ hostlist --find=foo3 'foo[0-10]'
 4
 $ hostlist --find=bar 'foo[0-10]'
 $ echo $?
@@ -165,7 +203,7 @@ $ echo $?
 
 ```lua
 local result = hostlist.delete (s1, s2)  -- Delete hosts in s2 from s1
-local result = hl1 - hl2                 -- Delete hoslist hl2 from hl1
+local result = hl1 - hl2                 -- Delete hostlist hl2 from hl1
 local result = hl - "foo1"               -- Delete foo1 from hostlist hl
 ```
 
@@ -186,6 +224,7 @@ local result = hl + "foo[1-4]"  -- Union of hostlist hl with a string
 $ hostlist --union 'foo[1-5]' 'foo[4-10]'
 foo[1-10]
 ```
+
  * Intersection of hostlists
 
 ```lua
@@ -217,12 +256,12 @@ foo[1-3,6-10]
 ```lua
 --  hostlist 'next' method returns an iterator for the hostlist:
 for host in hl:next() do
-  -- hosts remain in hostlist hl, take care not to modify hl during traversal
+  -- The iterator traverses a copy of hl, so it is safe to modify hl here
 end
 
---  An alternate method is to convert to a table and use pairs()
-for _,host in pairs (hl:expand()) do
-  -- iterating over an exapanded table of 'hl' here, ok to modify 'hl'
+--  An alternate method is to convert to a table and use ipairs()
+for _,host in ipairs (hl:expand()) do
+  -- iterating over an expanded table of 'hl' here
 end
 ```
 
@@ -237,17 +276,28 @@ hl:map (function (s) ... end)
 
 --  Also acts as a filter, e.g. return only hosts divisible by 10:
 local hl = hostlist.new ("foo[1-100]")
-local r = hl:map (function (s) (s:match ("[%d]+$")%10 == 0) and s end)
+local r = hl:map (function (s) return (s:match ("[%d]+$")%10 == 0) and s end)
 print (r)
 -- Output: foo[10,20,30,40,50,60,70,80,90,100]
 ```
 
 ```sh
 #  only return hosts divisible by 10:
-hostlist --filter='(s:match ("[%d]+$")%10 == 0) and s' foo[1-100]
+$ hostlist --filter='(s:match ("[%d]+$")%10 == 0) and s' foo[1-100]
 foo[10,20,30,40,50,60,70,80,90,100]
 
 #  prepend a string:
 $ hostlist --filter='"hosts"..s' [1-100]
 hosts[1-100]
 ```
+
+License
+-------
+
+lua-hostlist is licensed under the GNU Lesser General Public License
+version 3 (LGPL-3.0), the same license as flux-core. See `LICENSE`
+and `NOTICE.LLNS` for details.
+
+SPDX-License-Identifier: LGPL-3.0
+
+LLNL-CODE-645467

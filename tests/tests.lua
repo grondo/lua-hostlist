@@ -1,29 +1,15 @@
---[[#######################################################################
- #
- # Unit tests for lua hostlist implementation
- #
---#########################################################################
- #  Copyright (C) 2013, Lawrence Livermore National Security, LLC.
- #  Produced at Lawrence Livermore National Laboratory (cf, DISCLAIMER).
- #  Written by Mark Grondona <mgrondona@llnl.gov>
- #
- #  LLNL-CODE-645467 All Rights Reserved.
- #
- #  This file is part of lua-hostlist.
- #
- #  This program is free software; you can redistribute it and/or modify it
- #  under the terms of the GNU General Public License (as published by the
- #  Free Software Foundation) version 2, dated June 1991.
- #
- #  This program is distributed in the hope that it will be useful, but
- #  WITHOUT ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY
- #  or FITNESS FOR A PARTICULAR PURPOSE. See the terms and conditions of the
- #  GNU General Public License for more details.
- #
- #  You should have received a copy of the GNU General Public License along
- #  with SLURM; if not, write to the Free Software Foundation, Inc.,
- #  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA.
---#########################################################################--]]
+--------------------------------------------------------------
+-- Copyright 2013 Lawrence Livermore National Security, LLC
+-- (c.f. NOTICE.LLNS, LICENSE)
+--
+-- This file is part of lua-hostlist.
+-- For details, see https://github.com/grondo/lua-hostlist.
+--
+-- SPDX-License-Identifier: LGPL-3.0
+--------------------------------------------------------------
+--
+--  Unit tests for lua hostlist implementation
+--
 
 
 local luaunit = require 'luaunit'
@@ -285,5 +271,104 @@ function test_find()
 	end
 end
 
+function test_large_hostlist()
+	-- ranges larger than 16K hosts are supported
+	local h = hostlist.new ("foo[1-100000]")
+	luaunit.assertIsUserdata (h)
+	luaunit.assertEquals (100000, #h)
+	luaunit.assertEquals ("foo[1-100000]", tostring (h))
+
+	-- string representation is not truncated
+	local t = {}
+	for i = 1, 3000 do t[i] = "n" .. (i * 2) .. ".x" end
+	local s = table.concat (t, ",")
+	h = hostlist.new (s)
+	luaunit.assertEquals (3000, #h)
+	luaunit.assertEquals (s, tostring (h))
+	luaunit.assertEquals (s, "" .. h)
+	luaunit.assertEquals (3000, #hostlist.new (tostring (h)))
+end
+
+function test_invalid()
+	for _,s in pairs { "foo[", "foo]", "foo[1-", "foo[5-1]", "foo[a-b]" } do
+		luaunit.assertError (hostlist.new, s)
+	end
+end
+
+function test_self_operations()
+	local h = hostlist.new ("foo[1-3]")
+	h:concat (h)
+	luaunit.assertEquals ("foo[1-3,1-3]", tostring (h))
+
+	h = hostlist.new ("foo[1-5]")
+	h:delete (h)
+	luaunit.assertEquals (0, #h)
+
+	h = hostlist.new ("foo[1,1,2,1]")
+	h:delete_n (h, 1)
+	luaunit.assertEquals (0, #h)
+end
+
+function test_next_modify()
+	-- hostlist may be modified while iterating
+	local h = hostlist.new ("foo[1-5]")
+	local count = 0
+	for host in h:next() do
+		count = count + 1
+		h:delete (host)
+	end
+	luaunit.assertEquals (5, count)
+	luaunit.assertEquals (0, #h)
+
+	-- nested iteration
+	h = hostlist.new ("foo[1-3]")
+	count = 0
+	for a in h:next() do
+		for b in h:next() do
+			count = count + 1
+		end
+	end
+	luaunit.assertEquals (9, count)
+end
+
+function test_next_after_gc()
+	-- iterator remains valid if hostlist is garbage collected
+	local it = hostlist.new ("foo[1-3]"):next()
+	collectgarbage ()
+	collectgarbage ()
+	luaunit.assertEquals ("foo1", it())
+	luaunit.assertEquals ("foo2", it())
+	luaunit.assertEquals ("foo3", it())
+	luaunit.assertIsNil (it())
+end
+
+function test_expand_modify()
+	local h = hostlist.new ("foo[1-3]")
+	local t = h:expand (function (s) h:concat ("bar"); return s end)
+	luaunit.assertEquals ("foo1,foo2,foo3", table.concat (t, ","))
+	luaunit.assertEquals ("foo[1-3],bar,bar,bar", tostring (h))
+end
+
+function test_pop_returns()
+	local h = hostlist.new ("foo[1-5]")
+	luaunit.assertEquals ("foo5,foo4", table.concat (h:pop (2), ","))
+	luaunit.assertEquals ("foo1,foo2", table.concat (h:pop (-2), ","))
+	luaunit.assertEquals ("foo3", tostring (h))
+	luaunit.assertError (h.pop, h, 1, 2)
+end
+
+function test_new_multiple_args()
+	local h = hostlist.new ("foo[1-2]", "bar", hostlist.new ("baz[1-2]"))
+	luaunit.assertIsUserdata (h)
+	luaunit.assertEquals ("foo[1-2],bar,baz[1-2]", tostring (h))
+	luaunit.assertEquals (5, #h)
+	luaunit.assertError (hostlist.new, "foo1", "bar[")
+end
+
+function test_nth_string()
+	luaunit.assertEquals ("foo2", hostlist.nth ("foo[1-3]", 2))
+	luaunit.assertEquals ("foo3", hostlist.nth ("foo[1-3]", -1))
+	luaunit.assertIsNil (hostlist.nth ("foo[1-3]", 4))
+end
 
 os.exit (luaunit.LuaUnit.run())
