@@ -27,18 +27,25 @@ local function shell_quote (s)
 end
 
 --  Run hostlist with args and return stdout, stderr, and success.
+--   If `input' is set, it is written to the stdin of hostlist.
 --   The exit status is appended to stdout by the shell, since in
 --   Lua 5.1 closing a popen file does not return the exit status.
+local input
+
 local function hostlist (...)
 	local args = {}
 	for i, a in ipairs ({...}) do
 		args[i] = shell_quote (a)
 	end
-	local cmd = string.format ("%s -e %s ./hostlist %s 2>%s; echo $?",
+	local cmd = string.format ("%s -e %s ./hostlist %s <%s 2>%s; echo $?",
 		lua,
 		shell_quote ('package.cpath="./?.so;"..package.cpath'),
 		table.concat (args, " "),
+		input and "/dev/stdin" or "/dev/null",
 		tmpfile)
+	if input then
+		cmd = "printf %s " .. shell_quote (input) .. " | (" .. cmd .. ")"
+	end
 	local f = io.popen (cmd)
 	local out = f:read ("*a")
 	f:close ()
@@ -104,6 +111,32 @@ function test_flux_hostlist_aliases()
 		luaunit.assertEquals (out, t.result .. "\n")
 		luaunit.assertEquals (err, "")
 	end
+end
+
+function test_empty_input()
+	for _, s in ipairs { "", "\n", "  \t \n\n" } do
+		input = s
+		for _, args in ipairs {
+			{}, { "-c" }, { "-e" }, { "-u" }, { "-i" }, { "-X" },
+			{ "-x" }, { "-m" }, { "-R", "1" }, { "-S" }, { "-q" },
+			{ "-n", "1" }, { "-F", "foo1" },
+		} do
+			local out, err, ok = hostlist (unpack (args))
+			local desc = string.format ("%q with args %s",
+				s, table.concat (args, " "))
+			luaunit.assertFalse (ok, desc)
+			luaunit.assertEquals (out, "", desc)
+			luaunit.assertNotStrContains (err, "stack traceback", desc)
+		end
+	end
+	input = nil
+
+	--  Input from stdin still works
+	input = "foo1 foo2\n foo3\n"
+	local out, _, ok = hostlist ()
+	luaunit.assertTrue (ok)
+	luaunit.assertEquals (out, "foo[1-3]\n")
+	input = nil
 end
 
 local rc = luaunit.LuaUnit.run ()

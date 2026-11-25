@@ -433,8 +433,11 @@ else
 	input = hostlist_from_stdin ()
 end
 
--- Handle options u, i, X, x, m, D
-if opts.u then
+-- Handle options u, i, X, x, m, R
+if #input == 0 then
+	-- No input: result is an empty hostlist
+	hl = hostlist.new()
+elseif opts.u then
 	-- Union
 	hl = hostlist.union (unpack (input))
 elseif opts.i then
