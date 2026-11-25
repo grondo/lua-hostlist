@@ -89,6 +89,23 @@ function test_no_warning_by_default()
 	end
 end
 
+function test_flux_hostlist_aliases()
+	for _, t in ipairs {
+		{ args = { "-L", "3", "foo[1-10]" },                 result = "foo[1-3]" },
+		{ args = { "--limit=-3", "foo[1-10]" },              result = "foo[8-10]" },
+		{ args = { "-s", "3", "foo[1-10]" },                 result = "foo[1-3]" },
+		{ args = { "--intersect", "foo[1-5]", "foo[4-10]" }, result = "foo[4-5]" },
+		{ args = { "--intersection", "foo[1-5]", "foo[4-10]" }, result = "foo[4-5]" },
+		{ args = { "--delimiter=:", "-e", "foo[1-3]" },      result = "foo1:foo2:foo3" },
+		{ args = { "--delimiters=:", "-e", "foo[1-3]" },     result = "foo1:foo2:foo3" },
+	} do
+		local out, err, ok = hostlist (unpack (t.args))
+		luaunit.assertTrue (ok)
+		luaunit.assertEquals (out, t.result .. "\n")
+		luaunit.assertEquals (err, "")
+	end
+end
+
 local rc = luaunit.LuaUnit.run ()
 os.remove (tmpfile)
 os.exit (rc)

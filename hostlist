@@ -32,6 +32,7 @@ Usage: %s [OPTION]... [HOSTLIST]...
   -d, --delimiters=S           Set output delimiter (default = ",")
   -c, --count                  Print the number of hosts
   -s, --size=N                 Output at most N hosts (-N for last N hosts)
+  -L, --limit=N                Same as --size
   -e, --expand                 Expand host list instead of collapsing
   -n, --nth=N                  Output the host at index N (-N to index from end)
   -u, --union                  Union of all HOSTLIST arguments
@@ -279,19 +280,22 @@ end
 function parse_cmdline (arg)
 	local getopt     = get_opts
 
-	local optstring = "hqcen:d:R:f:F:s:umixXS"
+	local optstring = "hqcen:d:R:f:F:s:L:umixXS"
 	local opt_table = {
 		help                 = "h",
 		quiet                = "q",
 		count                = "c",
 		size                 = "s",
+		limit                = "L",
 		expand               = "e",
 		nth                  = "n",
 		delimiters           = "d",
+		delimiter            = "d",
 		hosts                = "h",
 		union                = "u",
 		minus                = "m",
 		intersection         = "i",
+		intersect            = "i",
 		exclude              = "x",
 		xor                  = "X",
 		remove               = "R",
@@ -343,6 +347,10 @@ function check_opts (opts)
 	--   as a string with characters "\" and "\n"
 	--
 	opts.d = opts.d and convert_string_to_escape (opts.d) or ","
+
+	--  -L, --limit is an alias for -s, --size
+	--
+	opts.s = opts.L or opts.s
 
 	--
 	-- Compile filter function if one was supplied

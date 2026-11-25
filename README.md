@@ -84,6 +84,7 @@ are supported:
   -d, --delimiters=S           Set output delimiter (default = ",")
   -c, --count                  Print the number of hosts
   -s, --size=N                 Output at most N hosts (-N for last N hosts)
+  -L, --limit=N                Same as --size
   -e, --expand                 Expand host list instead of collapsing
   -n, --nth=N                  Output the host at index N (-N to index from end)
   -u, --union                  Union of all HOSTLIST arguments
