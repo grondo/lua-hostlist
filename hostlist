@@ -32,6 +32,7 @@ Usage: %s [OPTION]... [HOSTLIST]...
   -d, --delimiters=S           Set output delimiter (default = ",")
   -c, --count                  Print the number of hosts
   -s, --size=N                 Output at most N hosts (-N for last N hosts)
+  -L, --limit=N                Same as --size
   -e, --expand                 Expand host list instead of collapsing
   -n, --nth=N                  Output the host at index N (-N to index from end)
   -u, --union                  Union of all HOSTLIST arguments
@@ -40,13 +41,18 @@ Usage: %s [OPTION]... [HOSTLIST]...
   -x, --exclude                Exclude all HOSTLIST args from first HOSTLIST
   -X, --xor                    Symmetric difference of all HOSTLIST args
   -R, --remove=N               Remove only N occurrences of args from HOSTLIST
+                                (deprecated)
   -S, --sort                   Return sorted HOSTLIST
   -f, --filter=CODE            Map Lua CODE over all hosts in result HOSTLIST
+                                (deprecated)
   -F, --find=HOST              Output position of HOST in result HOSTLIST
                                 (exits non-zero if host not found)
 
  An arbitrary number of HOSTLIST arguments are supported for all
   operations.  The default operation is to concatenate all HOSTLIST args.
+
+ The -R, --remove and -f, --filter options are deprecated and will be
+  removed in a future release.
 
 ]]
 	
@@ -254,6 +260,12 @@ function log_err (...)
 	log_msg (unpack(args))
 end
 
+function log_warn (...)
+	local args = {...}
+	args[1] = "Warning: " .. args[1]
+	log_msg (unpack(args))
+end
+
 function log_verbose (...)
 	if (verbose) then log_msg (...) end
 end
@@ -268,22 +280,25 @@ end
 function parse_cmdline (arg)
 	local getopt     = get_opts
 
-	local optstring = "hqcen:d:R:f:F:s:umixXS"
+	local optstring = "hqcen:d:R:f:F:s:L:umixXS"
 	local opt_table = {
 		help                 = "h",
 		quiet                = "q",
 		count                = "c",
 		size                 = "s",
+		limit                = "L",
 		expand               = "e",
 		nth                  = "n",
 		delimiters           = "d",
+		delimiter            = "d",
 		hosts                = "h",
 		union                = "u",
 		minus                = "m",
 		intersection         = "i",
+		intersect            = "i",
 		exclude              = "x",
 		xor                  = "X",
-		remove               = "D",
+		remove               = "R",
 		filter               = "f",
 		find                 = "F",
 		sort                 = "S",
@@ -301,7 +316,19 @@ function convert_string_to_escape (s)
 end
 
 function check_opts (opts)
-	
+
+	--
+	--  Warn about deprecated options:
+	--
+	if opts.R ~= nil then
+		log_warn ("-R, --remove is deprecated and will be removed"
+		          .. " in a future release\n")
+	end
+	if opts.f ~= nil then
+		log_warn ("-f, --filter is deprecated and will be removed"
+		          .. " in a future release\n")
+	end
+
 	--
 	--  Check that no more than one exclusive option was passed:
 	--
@@ -320,6 +347,10 @@ function check_opts (opts)
 	--   as a string with characters "\" and "\n"
 	--
 	opts.d = opts.d and convert_string_to_escape (opts.d) or ","
+
+	--  -L, --limit is an alias for -s, --size
+	--
+	opts.s = opts.L or opts.s
 
 	--
 	-- Compile filter function if one was supplied

@@ -93,6 +93,7 @@ check-coverage:
 
 check: hostlist.so
 	@LUAUNIT_OUTPUT=tap LUA_PATH="$(LUA_PATH);tests/?.lua" $(LUA) tests/tests.lua
+	@LUAUNIT_OUTPUT=tap LUA_PATH="$(LUA_PATH);tests/?.lua" $(LUA) tests/cli.lua
 
 install:
 	install -D -m0755 hostlist.so $(DESTDIR)$(LUA_OBJDIR)/hostlist.so

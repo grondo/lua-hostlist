@@ -84,6 +84,7 @@ are supported:
   -d, --delimiters=S           Set output delimiter (default = ",")
   -c, --count                  Print the number of hosts
   -s, --size=N                 Output at most N hosts (-N for last N hosts)
+  -L, --limit=N                Same as --size
   -e, --expand                 Expand host list instead of collapsing
   -n, --nth=N                  Output the host at index N (-N to index from end)
   -u, --union                  Union of all HOSTLIST arguments
@@ -92,8 +93,10 @@ are supported:
   -x, --exclude                Exclude all HOSTLIST args from first HOSTLIST
   -X, --xor                    Symmetric difference of all HOSTLIST args
   -R, --remove=N               Remove only N occurrences of args from HOSTLIST
+                                (deprecated)
   -S, --sort                   Return sorted HOSTLIST
   -f, --filter=CODE            Map Lua CODE over all hosts in result HOSTLIST
+                                (deprecated)
   -F, --find=HOST              Output position of HOST in result HOSTLIST
                                 (exits non-zero if host not found)
 ```
@@ -101,6 +104,8 @@ are supported:
  An arbitrary number of HOSTLIST arguments are supported for all
   operations.  The default operation is to concatenate all HOSTLIST args.
 
+ The -R, --remove and -f, --filter options are deprecated and will be
+  removed in a future release.
 
 The lua-hostlist API
 --------------------
@@ -286,16 +291,6 @@ local hl = hostlist.new ("foo[1-100]")
 local r = hl:map (function (s) return (s:match ("[%d]+$")%10 == 0) and s end)
 print (r)
 -- Output: foo[10,20,30,40,50,60,70,80,90,100]
-```
-
-```sh
-#  only return hosts divisible by 10:
-$ hostlist --filter='(s:match ("[%d]+$")%10 == 0) and s' foo[1-100]
-foo[10,20,30,40,50,60,70,80,90,100]
-
-#  prepend a string:
-$ hostlist --filter='"hosts"..s' [1-100]
-hosts[1-100]
 ```
 
 License
