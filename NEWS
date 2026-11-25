@@ -1,3 +1,22 @@
+Version 0.8 (2026-11-25):
+- Use libhostlist from flux-core. This removes limits on hosts per range
+  (16K), string length (4K), and ranges in brackets (10K), and fixes many
+  parsing and memory bugs. Invalid input no longer prints to stderr.
+- Relicense under LGPL-3.0 to match flux-core.
+- Support Lua 5.1 through 5.5.
+- Fix hostlist.new() to use all arguments, not only the first.
+- Fix hl:concat(hl), hl:delete(hl), and iterators after garbage collection.
+  Iterators, map(), and expand() use a copy, so you can safely change a
+  hostlist while iterating.
+- Return integers from count() and find() in Lua 5.3 and later.
+- Remove forced garbage collection, which made many operations slow.
+- Install the module into a directory in the Lua search path (#5).
+- hostlist: fix the --remove option.
+- hostlist: add -L, --limit, --delimiter, --intersect to match flux hostlist.
+- hostlist: deprecate -R, --remove and -f, --filter.
+- Fix build with -Werror on glibc 2.42 and later.
+- Convert tests from lunit to luaunit to fix a `make check` crash.
+
 Version 0.7 (2025-08-27):
 - More fixes for RHEL 9 and Lua 5.4 compatibility.
 
